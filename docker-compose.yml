@@ -1,0 +1,58 @@
+# Phishing triage — reproducible Linux + Playwright capture environment.
+#
+# Build:  docker compose build
+# UI:     docker compose up
+# Shell:  docker compose run --rm triage bash
+#
+# Mounts:
+#   ./captures -> /data/captures   (PHISH_OUTPUT_DIR — screenshots, HTML)
+#   ./data      -> /app/data        (pipeline CSVs: raw/interim/processed)
+#   ./outputs   -> /app/outputs     (models, metrics, figures)
+#   ./logs      -> /app/logs        (pipeline logs)
+
+services:
+  triage:
+    build: .
+    image: phishing-triage:app-v1
+    ports:
+      - "8501:8501"
+    environment:
+      PYTHONPATH: /app:/app/src
+      PHISH_PROJECT_ROOT: /app
+      PHISH_DATA_DIR: /app/data
+      PHISH_OUTPUTS_DIR: /app/outputs
+      PHISH_LOGS_DIR: /app/logs
+      PHISH_OUTPUT_DIR: /data/captures
+      # Set in .env next to this file or export before `docker compose up`
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./captures:/data/captures
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+    working_dir: /app
+    command:
+      - streamlit
+      - run
+      - src/app_v1/frontend.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+
+  # Run batch ML pipeline (scraping + DNS + training) in isolation — no default command.
+  pipeline:
+    build: .
+    image: phishing-triage:app-v1
+    environment:
+      PYTHONPATH: /app:/app/src
+      PHISH_PROJECT_ROOT: /app
+      PHISH_DATA_DIR: /app/data
+      PHISH_OUTPUTS_DIR: /app/outputs
+      PHISH_LOGS_DIR: /app/logs
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+    working_dir: /app
+    profiles:
+      - pipeline

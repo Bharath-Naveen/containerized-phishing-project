@@ -1,0 +1,68 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# --- Secrets & credentials (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+**/kaggle.json
+kaggle.json
+.kaggle/
+
+# --- All CSV datasets repo-wide ---
+*.csv
+seed_phish_urls.csv
+
+# --- Model & serialized artifacts ---
+*.joblib
+*.pkl
+*.pickle
+
+# --- data/raw: ignore contents; keep placeholders ---
+data/raw/*
+!data/raw/README.md
+!data/raw/.gitkeep
+!data/raw/kaggle/
+data/raw/kaggle/*
+!data/raw/kaggle/README.txt
+
+# --- data/interim & processed ---
+data/interim/*
+!data/interim/README.md
+!data/interim/.gitkeep
+
+data/processed/*
+!data/processed/README.md
+!data/processed/.gitkeep
+
+# --- Training / runtime artifacts ---
+outputs/
+logs/
+captures/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# --- Jupyter ---
+.ipynb_checkpoints/
