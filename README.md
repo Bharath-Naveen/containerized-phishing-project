@@ -147,3 +147,91 @@ Frontend guide: `docs/FRONTEND_GUIDE.md`.
 - Never commit `.env`, API keys, raw datasets, captures, or outputs.
 - Review `.gitignore` before pushing.
 - Legacy code in `archive/legacy` is reference-only and deprecated.
+
+---
+
+## TL;DR (Simple Explanation)
+
+This project is a phishing detection system that analyzes a URL and determines whether it is:
+
+- likely legitimate  
+- uncertain  
+- likely phishing  
+
+Instead of relying only on a machine learning model, the system combines multiple layers of analysis to make a more reliable and explainable decision.
+
+---
+
+## How the System Works (Simplified)
+
+The system evaluates a website in several steps:
+
+1. **URL-Based ML (Layer 1)**  
+   - A machine learning model looks only at the URL and domain features  
+   - Produces a fast initial probability  
+   - This is only a first signal and can be wrong  
+
+2. **Live Page Analysis (Reinforcement Layer)**  
+   - The system loads the page safely  
+   - Checks for basic behavioral and branding signals  
+
+3. **HTML / DOM Analysis**  
+   - Examines page structure  
+   - Looks for:
+     - login forms  
+     - suspicious redirects  
+     - fake wrapper/interstitial pages  
+
+4. **Host and Path Reasoning**  
+   - Evaluates the domain and URL path  
+   - Determines if the URL structure is normal or suspicious  
+
+5. **AI Adjudication (Optional)**  
+   - Used only for borderline cases  
+   - Reviews structured evidence (not raw HTML)  
+   - Provides a bounded adjustment to the decision  
+
+6. **Final Safety Guardrail**  
+   - If the page shows **no phishing behavior** (no credential capture, no impersonation, no deceptive redirects),  
+     the system forces a **likely legitimate** decision  
+   - This prevents false positives from the ML model  
+
+---
+
+## How to Interpret the Dashboard
+
+When you analyze a URL in the frontend, each section represents a part of the decision:
+
+- **Verdict**  
+  Final classification, confidence level, and combined score  
+
+- **Layer-1 ML**  
+  The model’s prediction based only on the URL  
+
+- **Reinforcement**  
+  Results from loading and observing the live page  
+
+- **HTML Structure Signals**  
+  Summary of page structure (forms, links, layout patterns)  
+
+- **DOM Anomaly Review**  
+  Detection of suspicious patterns like fake wrappers or mismatched links  
+
+- **Host / Path Reasoning**  
+  Whether the domain and URL path look legitimate or suspicious  
+
+- **AI Adjudication**  
+  Optional AI-based reasoning used only for uncertain cases  
+
+- **Evidence Gaps**  
+  Missing signals due to capture issues or blocked content  
+
+---
+
+## Key Design Idea
+
+The system is intentionally designed so that:
+
+> The final decision is based on **evidence**, not just the ML model.
+
+This reduces false positives on legitimate websites while still detecting phishing pages that show real malicious behavior.
