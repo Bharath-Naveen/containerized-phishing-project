@@ -5,9 +5,10 @@ from __future__ import annotations
 import ipaddress
 import re
 from typing import Any, Dict
-from urllib.parse import urlparse
 
 import tldextract
+
+from src.pipeline.safe_url import safe_urlparse
 
 _FREE_HOSTING = (
     "github.io", "gitlab.io", "vercel.app", "netlify.app", "pages.dev",
@@ -23,7 +24,16 @@ _CLOUD_HINTS = (
 def extract_hosting_features(url: str) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     raw = (url or "").strip()
-    parsed = urlparse(raw)
+    parsed, parse_err = safe_urlparse(raw)
+    if parse_err or parsed is None:
+        out["port_present"] = 0
+        out["punycode_flag"] = 0
+        out["registered_domain"] = ""
+        out["public_suffix"] = ""
+        out["free_hosting_flag"] = 0
+        out["cloud_hosting_flag"] = 0
+        out["private_host_flag"] = 0
+        return out
     host = (parsed.netloc or "").lower()
     if "@" in host:
         host = host.split("@")[-1]

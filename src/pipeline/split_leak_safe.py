@@ -7,37 +7,36 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import urlsplit
 
 import numpy as np
 import pandas as pd
-import tldextract
 from sklearn.model_selection import StratifiedGroupKFold
 
 from src.pipeline.paths import ensure_layout, processed_dir, reports_dir
+from src.pipeline.safe_url import leak_safe_group_key
 
 logger = logging.getLogger(__name__)
 
 
-def _host(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower()
-
-
-def _registered_domain(url: str) -> str:
-    host = _host(url)
-    if not host:
-        return "missing_host"
-    ext = tldextract.extract(host)
-    reg = ".".join(p for p in (ext.domain, ext.suffix) if p)
-    return reg.lower() or host
+def _leak_group_and_fallback(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    """Per-row registered-domain style group key; malformed URLs get deterministic ``malformed::<hash>``."""
+    urls = df["canonical_url"].fillna("").astype(str)
+    keys: list[str] = []
+    fbs: list[int] = []
+    for u in urls:
+        k, fb = leak_safe_group_key(u)
+        keys.append(k)
+        fbs.append(int(fb))
+    return (
+        pd.Series(keys, index=df.index),
+        pd.Series(fbs, index=df.index, dtype=int),
+    )
 
 
 def ensure_group_column(df: pd.DataFrame) -> pd.Series:
-    if "registered_domain" in df.columns and df["registered_domain"].notna().any():
-        s = df["registered_domain"].astype(str).str.strip().str.lower()
-        s = s.replace("", np.nan).fillna(df["canonical_url"].astype(str).map(_registered_domain))
-        return s
-    return df["canonical_url"].astype(str).map(_registered_domain)
+    """Same keys used for StratifiedGroupKFold (for audits / leakage_report)."""
+    g, _ = _leak_group_and_fallback(df)
+    return g
 
 
 def stratified_group_train_test(
@@ -49,15 +48,17 @@ def stratified_group_train_test(
     """Single train/test split; groups never appear in both sets."""
     df = df.copy()
     df["label"] = pd.to_numeric(df["label"], errors="coerce").fillna(1).astype(int)
-    groups = ensure_group_column(df)
+    groups, fallback = _leak_group_and_fallback(df)
     df["_leak_group"] = groups
 
     y = df["label"].values
     n_splits = max(3, min(10, int(round(1.0 / max(test_size, 0.05)))))
     sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     train_idx, test_idx = next(sgkf.split(np.zeros(len(df)), y, df["_leak_group"].values))
-    train = df.iloc[train_idx].drop(columns=["_leak_group"])
-    test = df.iloc[test_idx].drop(columns=["_leak_group"])
+    train = df.iloc[train_idx].drop(columns=["_leak_group"]).copy()
+    test = df.iloc[test_idx].drop(columns=["_leak_group"]).copy()
+    train["group_key_fallback_used"] = fallback.iloc[train_idx].values
+    test["group_key_fallback_used"] = fallback.iloc[test_idx].values
 
     stats: Dict[str, Any] = {
         "split_method": "StratifiedGroupKFold_first_fold",

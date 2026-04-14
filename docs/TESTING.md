@@ -1,50 +1,88 @@
-# Testing strategy
+# Testing Guide
 
-## 1. Pipeline validation
+This project has three testing scopes: unit/logic, pipeline smoke, and runtime app checks.
 
-**Goal:** Ingest → clean → enrich → split produce consistent schemas without crashing.
+## 1) Fast local regression (recommended on every change)
 
-- **Automated:** `pytest tests/ -q` (imports, label mapping, Layer-1 feature row shape).
-- **Manual smoke:** After placing a small Kaggle CSV under `data/raw/kaggle/`:
+```bash
+pytest -q
+```
 
-  ```bash
-  python -m src.pipeline.run_kaggle_pipeline --limit 500
-  ```
+Focus:
 
-- **Checks:** `outputs/reports/kaggle_label_audit.json` (both classes present), `outputs/reports/leakage_audit.json` (zero URL/domain overlap between train and test when using `split_leak_safe`).
+- feature extraction behavior
+- decision policy guardrails
+- AI adjudication bounded logic
+- host/path + DOM anomaly regressions
 
-## 2. ML-only inference (Layer-1)
+## 2) Pipeline smoke test
 
-**Goal:** `layer1_primary.joblib` loads and returns a probability for an arbitrary URL.
+After dataset setup (`docs/DATASET_SETUP.md`):
 
-- **Automated:** `tests/test_ml_inference_smoke.py` (skipped if no model on disk).
-- **Manual:**
+```bash
+python -m src.pipeline.run_kaggle_pipeline --sample-size 5000
+```
 
-  ```bash
-  cd src && python -m app_v1.analyze_dashboard --url "https://example.com" --no-reinforcement
-  ```
+Verify key outputs:
 
-## 3. Reinforcement layer
+- `outputs/reports/kaggle_label_audit.json`
+- `outputs/reports/leakage_audit.json`
+- `outputs/models/layer1_primary.joblib`
 
-**Goal:** Live fetch + org-style signals run in container without crashing on dead hosts.
+## 3) Runtime app checks
 
-- **Manual (Docker recommended):** `docker compose up` → dashboard → analyze with reinforcement enabled.
-- **CLI:** Same as above **without** `--no-reinforcement` (uses Playwright/HTTP inside the container image).
+### ML-only path
 
-Expect graceful handling: blocked capture, timeouts, and empty HTML should surface under `evidence_gaps` in the JSON, not stack traces in the UI.
+```bash
+python -m src.app_v1.analyze_dashboard --url "https://example.com" --no-reinforcement
+```
 
-## 4. End-to-end dashboard
+### Full runtime (with reinforcement)
 
-**Goal:** Streamlit subprocess path resolves and renders verdict + ML + reinforcement sections.
+```bash
+python -m src.app_v1.analyze_dashboard --url "https://example.com"
+```
 
-- Run `streamlit run src/app_v1/frontend.py`, submit a URL, confirm JSON in `outputs/analysis/last_dashboard_analysis.json`.
+Expected:
 
-## 5. Challenge-set evaluation (optional)
+- no crash
+- explainable `verdict.reasons`
+- sensible `evidence_gaps` if capture is partial
 
-**Goal:** Measure Layer-1 (or full enrich) on copied challenge lists—not primary accuracy.
+## 4) Streamlit UI check
 
-- Copy `archive/sample_data/challenge/*.txt` → `data/raw/`, then `python -m src.pipeline.ingest_challenge` and continue with clean / enrich / optional batch scoring (document any ad-hoc notebook or script you add).
+```bash
+streamlit run src/app_v1/frontend.py
+```
 
-## CI suggestion
+Validate that each section renders:
 
-On PRs: run `pytest tests/` only. Full pipeline + Playwright jobs stay optional/nightly due to data size and network.
+- Verdict
+- Layer-1 ML
+- Reinforcement
+- HTML structure
+- HTML / DOM anomaly
+- Host/path reasoning
+- AI adjudication
+
+## 5) Optional targeted tests
+
+Run only relevant modules while developing:
+
+```bash
+pytest tests/test_html_dom_anomaly_signals.py -q
+pytest tests/test_host_path_reasoning.py -q
+pytest tests/test_ai_adjudicator.py -q
+```
+
+## CI Recommendation
+
+On pull requests:
+
+- run `pytest -q`
+- run lint/static checks if your team adds them
+
+Nightly or scheduled jobs:
+
+- larger pipeline runs
+- capture-heavy runtime checks in Docker

@@ -1,8 +1,11 @@
-"""Local Streamlit UI for phishing triage (single-URL pipeline run).
+"""DEPRECATED: screenshot-first Streamlit UI (legacy reference only).
 
-Run from the project root::
+This file is preserved for historical context and old experiments.
+Primary maintained UI is: ``src/app_v1/frontend.py``.
 
-    streamlit run src/app_v1/frontend.py
+Run legacy UI from project root::
+
+    streamlit run archive/legacy/frontend_screenshot_legacy.py
 
 Requires: pip install streamlit
 """

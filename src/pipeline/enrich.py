@@ -6,8 +6,6 @@ import argparse
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlsplit
-
 import pandas as pd
 from tqdm import tqdm
 
@@ -24,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 def _hostname(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower()
+    h, _ = safe_hostname(url)
+    return h
 
 
 def enrich_row(
@@ -87,7 +86,7 @@ def enrich(
     limit: Optional[int] = None,
     resume: bool = True,
     use_playwright: bool = False,
-    checkpoint_every: int = 25,
+    checkpoint_every: Optional[int] = None,
     artifact_root: Optional[Path] = None,
     layer1_only: bool = False,
     layer1_use_dns: bool = False,
@@ -95,6 +94,7 @@ def enrich(
     checkpoint_name: str = "enriched_features.csv",
 ) -> Path:
     ensure_layout()
+    ck_every = checkpoint_every if checkpoint_every is not None else (400 if layer1_only else 25)
     in_path = cleaned_csv or (processed_dir() / "cleaned.csv")
     base = pd.read_csv(in_path, dtype=str, low_memory=False)
     if base.empty:
@@ -127,7 +127,7 @@ def enrich(
             feats = {"canonical_url": key, "enrich_fatal_error": str(e)}
         batch.append(feats)
         done.add(key)
-        if len(batch) >= checkpoint_every:
+        if len(batch) >= ck_every:
             acc = pd.concat([acc, pd.DataFrame(batch)], ignore_index=True)
             acc = acc.drop_duplicates(subset=["canonical_url"], keep="last")
             _save_feature_table(ck_path, acc)
@@ -145,7 +145,13 @@ def enrich(
         out = merge_base.merge(acc, on="canonical_url", how="left")
     out_path = output_csv or (processed_dir() / "enriched.csv")
     out.to_csv(out_path, index=False)
-    logger.info("Wrote enriched -> %s rows=%s", out_path, len(out))
+    logger.info(
+        "Wrote enriched -> %s rows=%s (layer1_only=%s checkpoint_every=%s)",
+        out_path,
+        len(out),
+        layer1_only,
+        ck_every,
+    )
     return out_path
 
 
@@ -177,6 +183,12 @@ def main() -> None:
         default="enriched_features.csv",
         help="Checkpoint filename under data/interim/",
     )
+    p.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=None,
+        help="Rows between checkpoint writes (default: 400 layer1-only, 25 full enrich).",
+    )
     args = p.parse_args()
     art = args.artifacts or (outputs_dir() / "enrich_artifacts")
     enrich(
@@ -189,6 +201,7 @@ def main() -> None:
         layer1_use_dns=args.layer1_use_dns,
         output_csv=args.output,
         checkpoint_name=args.checkpoint_name,
+        checkpoint_every=args.checkpoint_every,
     )
 
 

@@ -157,3 +157,65 @@ def org_style_from_capture_blob(capture: Dict[str, Any], input_url: str) -> Dict
         capture_error=str(err) if err else None,
         page_fetch_ok=fetch_ok,
     )
+
+
+def dampen_org_style_for_page_family(
+    org_style: Dict[str, Any],
+    html_dom_summary: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Page-family aware suppression for content/reference surfaces.
+
+    On content-heavy pages, incidental brand mentions in article/forum text should
+    not dominate org-style risk unless trust-action/credential signals are present.
+    """
+    o = dict(org_style or {})
+    risk = float(o.get("org_style_risk_score") or 0.0)
+    dom = html_dom_summary or {}
+    family = str(dom.get("page_family") or "")
+    is_content_family = family in {"content_feed_forum_aggregator", "article_news"}
+    docs_like = family == "public_docs_or_reference" or bool(dom.get("page_family") == "public_docs_or_reference")
+    if not (is_content_family or docs_like):
+        return o
+
+    trust_action_context = bool(dom.get("trust_action_context"))
+    suspicious_form_action = int(dom.get("form_action_external_domain_count") or 0) > 0
+    login_harvester = bool(dom.get("login_harvester_pattern"))
+    wrapper_pattern = bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern"))
+    trust_surface_mismatch = bool(dom.get("trust_surface_brand_domain_mismatch"))
+    strong_anchor_mismatch = int(dom.get("anchor_strong_mismatch_count") or 0) > 0
+    suspicious_cred = bool(dom.get("suspicious_credential_collection_pattern"))
+
+    strong_phish_context = any(
+        (
+            trust_action_context,
+            suspicious_form_action,
+            login_harvester,
+            wrapper_pattern,
+            trust_surface_mismatch,
+            strong_anchor_mismatch,
+            suspicious_cred,
+        )
+    )
+    if strong_phish_context:
+        return o
+
+    brand_mism = list(o.get("brand_domain_mismatches") or [])
+    if not brand_mism:
+        # Still allow a mild general content-profile dampener.
+        damp = 0.90 if is_content_family else 0.92
+        risk2 = max(0.0, risk * damp)
+        if risk2 < risk - 1e-8:
+            o["org_style_risk_score"] = round(risk2, 4)
+            o["reasons"] = list(o.get("reasons") or []) + [
+                "Content/reference page-family dampener applied to org-style risk (no trust-action mismatch evidence)."
+            ]
+        return o
+
+    # Brand mentions on content/docs pages: reduce strongly when no trust-action evidence.
+    damp = 0.45 if is_content_family else 0.55
+    risk2 = max(0.0, risk * damp)
+    o["org_style_risk_score"] = round(risk2, 4)
+    o["reasons"] = list(o.get("reasons") or []) + [
+        "Body-content brand mentions de-emphasized for content/reference page-family without credential/trust-action signals."
+    ]
+    return o

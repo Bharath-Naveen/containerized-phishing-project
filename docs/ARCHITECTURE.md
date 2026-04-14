@@ -1,52 +1,64 @@
-# Architecture (post-pivot)
+# Architecture
 
-## Goals
+This document describes the **active architecture** used by the team and what is intentionally deprecated.
 
-1. **Layer-1 ML triage** — fast phishing vs legitimate classifier from **URL + host (+ optional DNS)** features only. **No browser required** for training or inference.
-2. **Layer-2 reinforcement** — containerized live fetch (Playwright / HTTP fallback), DNS/redirect visibility, DOM/login heuristics, and **org-style** signals (free hosting, brand/domain mismatch, sensitive copy).
-3. **Layer-3 explanation** — dashboard JSON + UI: verdict, scores, contributing signals, and explicit **evidence gaps** when the page did not load.
+## High-Level Layers
 
-Screenshot **comparison** against a captured legit reference is **deprecated** for product UX; the old Streamlit entrypoint lives under **`archive/legacy/frontend_screenshot_legacy.py`** (see `archive/legacy/README.md`).
+1. **Layer 1: URL/host ML triage** (`src/pipeline`, runtime in `src/app_v1/ml_layer1.py`)
+   - fast score from lexical/hosting/brand-structure features.
+2. **Layer 2: Reinforcement** (`src/app_v1/capture.py`, `org_style_signals.py`)
+   - optional live fetch/capture + org-style checks.
+3. **Layer 3: HTML/DOM + host/path reasoning**
+   - `html_structure_signals.py`
+   - `html_dom_anomaly_signals.py`
+   - `host_path_reasoning.py`
+4. **Layer 4: Bounded AI adjudication**
+   - `ai_adjudicator.py` over compact structured evidence only.
+5. **Final decision policy**
+   - bounded legitimacy rescue + hard no-phishing-evidence guard in `analyze_dashboard.py`.
 
-## Data sources
+## Active Runtime Flow
 
-| Source | Role |
-|--------|------|
-| **Kaggle** `harisudhan411/phishing-and-legitimate-urls` (under `data/raw/kaggle/`) | **Primary** supervised training (binary labels). |
-| **`phish-*.txt` / `legit-*.txt`** brand files | **Challenge / eval / demos** only (`python -m src.pipeline.ingest_challenge`). Not merged into the primary Kaggle training path. |
+`src/app_v1/analyze_dashboard.py`:
 
-**Label conventions**
+1. Run Layer-1 ML probability.
+2. Optional reinforcement capture.
+3. Extract HTML structure + DOM anomaly signals.
+4. Compute host/path reasoning.
+5. Blend ML + reinforcement with bounded discounts/guardrails.
+6. Optional AI bounded adjustment.
+7. Apply hard no-phishing-evidence override when all red flags are absent.
+8. Emit explainable JSON payload for frontend and audits.
 
-- **Kaggle file:** `1` = legitimate, `0` = phishing (verified in `outputs/reports/kaggle_label_audit.json`).
-- **Internal pipeline / models:** `0` = legitimate, `1` = phishing (`src/pipeline/label_policy.py`).
+## Training/Eval Architecture
 
-## Batch ML path (primary)
+Primary path (`src/pipeline/run_kaggle_pipeline.py`):
 
-```text
-kaggle_ingest → clean (dedupe canonical_url) → enrich --layer1-only → split_leak_safe → train --layer1-only → metrics
-```
+`kaggle_ingest -> clean -> enrich --layer1-only -> split_leak_safe -> train --layer1-only`
 
-Orchestrator CLI: `python -m src.pipeline.run_kaggle_pipeline [--limit N]`
+Supporting utilities:
 
-- **Deduplication:** `clean.py` on `canonical_url`.
-- **Leak-aware split:** `StratifiedGroupKFold` on **registered domain** (derived from URL if needed) in `split_leak_safe.py`.
-- **Leakage audit:** `outputs/reports/leakage_audit.json`.
-- **Training excludes** filename/metadata columns (`source_file`, `source_dataset`, `source_brand_hint`, `action_category`, `kaggle_raw_status`, …) — see `src/pipeline/train.py`.
+- leakage report: `src/pipeline/leakage_report.py`
+- audits: `src/pipeline/fp_audit.py`, `src/pipeline/phish_audit.py`, `src/pipeline/ai_adjudication_audit.py`
 
-## Interactive app
+## Deprecated Components
 
-- **Dashboard:** `streamlit run src/app_v1/frontend.py` (subprocess `python -m app_v1.analyze_dashboard`).
-- **Artifacts:** `outputs/analysis/last_dashboard_analysis.json`.
+Deprecated screenshot-first workflow is retained under `archive/legacy`:
 
-Live URL work runs **inside Docker** in the recommended deployment (`docker compose up`).
+- `archive/legacy/frontend_screenshot_legacy.py`
+- `archive/legacy/scripts/*`
 
-## Reuse vs deprecate
+These are **reference-only** and not part of the recommended runtime or training loop.
 
-- **Reuse:** Docker/compose, `clean`, feature extractors (`url_features`, `hosting_features`, `dns_features`), `split` (legacy path), `train`, enrichment HTTP/Playwright stack for Layer-2.
-- **Deprecated (UX):** side-by-side screenshot comparison as primary story (`archive/legacy/frontend_screenshot_legacy.py`; `compare.py` still used by legacy `orchestrator` JSONL flow).
-- **New:** `kaggle_ingest`, `ingest_challenge`, `layer1_features`, `split_leak_safe`, `leakage_report`, `run_kaggle_pipeline`, `ml_layer1`, `org_style_signals`, `analyze_dashboard`, dashboard `frontend.py`.
+## Data Boundaries and Security
 
-## Optional
+- Raw datasets live under `data/raw` (gitignored except placeholders).
+- Intermediate/processed data live under `data/interim`, `data/processed` (gitignored except placeholders).
+- Captures, outputs, logs are gitignored.
+- Raw full HTML is not sent to AI; only compact summaries are used.
 
-- **Multi-seed eval:** `python -m src.pipeline.eval_multi_seed --input data/processed/enriched_kaggle_layer1.csv --seeds 42,43,44`
-- **Kaggle download:** `pip install kagglehub` then `python -m src.pipeline.kaggle_ingest --download`
+## Why This Architecture
+
+- Keeps model speed (Layer-1) while adding explainability and correction layers.
+- Separates train-time code (`src/pipeline`) from runtime app (`src/app_v1`).
+- Preserves old code in archive without deleting team history.

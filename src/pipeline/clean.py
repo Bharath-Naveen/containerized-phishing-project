@@ -4,56 +4,20 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 from pathlib import Path
 from typing import Optional, Tuple
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 
 from src.pipeline.paths import ensure_layout, interim_dir, processed_dir
+from src.pipeline.safe_url import canonicalize_url_safe
 
 logger = logging.getLogger(__name__)
 
 
 def canonicalize_url(raw: str) -> Tuple[str, int, str]:
     """Return (canonical_url, invalid_url_flag, parse_error)."""
-    s = (raw or "").strip()
-    if not s:
-        return "", 1, "empty"
-    s = re.sub(r"[\s\u200b\u00a0]+", "", s)
-    if "://" not in s:
-        s = "http://" + s
-    try:
-        parts = urlsplit(s)
-    except ValueError as e:
-        return s, 1, f"split_error:{e}"
-
-    scheme = (parts.scheme or "http").lower()
-    netloc = (parts.netloc or "").lower()
-    if not netloc:
-        return s, 1, "missing_host"
-    path = parts.path or ""
-    if path.endswith("/") and path != "/":
-        path = path.rstrip("/")
-    query = parts.query or ""
-    fragment = parts.fragment or ""
-
-    # Normalize query key order lightly
-    if query:
-        q_pairs = parse_qsl(query, keep_blank_values=True)
-        query = urlencode(q_pairs)
-
-    canon = urlunsplit((scheme, netloc, path, query, fragment))
-    invalid = 0
-    err = ""
-    if scheme not in {"http", "https"}:
-        invalid = 1
-        err = "unsupported_scheme"
-    if ".." in path:
-        invalid = 1
-        err = "suspicious_path"
-    return canon, invalid, err
+    return canonicalize_url_safe(raw)
 
 
 def clean(

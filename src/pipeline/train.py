@@ -17,6 +17,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     precision_score,
@@ -27,6 +28,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from src.pipeline.label_policy import phish_probability_from_proba_row
 from src.pipeline.layer1_features import layer1_feature_key_set
 from src.pipeline.paths import ensure_layout, figures_dir, metrics_dir, models_dir, processed_dir, reports_dir
 
@@ -48,6 +50,22 @@ FETCH_PROXY_FEATURES: Set[str] = {
     "challenge_detected",
 }
 
+# Scheme is a weak legitimacy signal in our Kaggle mix (many benign rows are http://; phish uses https).
+LAYER1_EXCLUDE_FROM_X: Set[str] = {"has_https"}
+
+# Used only for **choosing** ``layer1_primary.joblib`` among fitted models (documented; not a runtime allowlist).
+LAYER1_OFFICIAL_HTTPS_AUDIT_URLS: Tuple[str, ...] = (
+    "https://www.google.com/",
+    "https://google.com",
+    "https://www.amazon.com/",
+    "https://amazon.com",
+    "https://www.wikipedia.org/",
+    "https://accounts.google.com",
+    "https://paypal.com",
+    "https://login.microsoftonline.com",
+)
+
+
 BASE_EXCLUDE_FROM_X = {
     "url",
     "source_file",
@@ -62,6 +80,7 @@ BASE_EXCLUDE_FROM_X = {
     "action_category",
     "kaggle_raw_status",
     "invalid_url",
+    "group_key_fallback_used",
     "_split",
 }
 
@@ -82,7 +101,7 @@ def _exclude_for_training(exclude_fetch_proxy: bool) -> Set[str]:
 
 def _exclude_layer1_only(df: pd.DataFrame, exclude_fetch_proxy: bool, *, include_dns: bool) -> Set[str]:
     allowed = layer1_feature_key_set(include_dns=include_dns)
-    blocked = (set(df.columns) - allowed) | _exclude_for_training(exclude_fetch_proxy)
+    blocked = (set(df.columns) - allowed) | _exclude_for_training(exclude_fetch_proxy) | LAYER1_EXCLUDE_FROM_X
     return blocked
 
 
@@ -117,6 +136,39 @@ def _feature_matrix(
     return X, y, num_cols, cat_cols
 
 
+def _xgb_monotone_decreasing_trust(num_cols: List[str]) -> Tuple[int, ...]:
+    """Trust features ↓ P(phish); ``https_without_official_anchor`` ↑ P(phish) (dataset artifact correction)."""
+    trust_decrease = {
+        "official_registrable_anchor",
+        "official_domain_family",
+        "brand_hostname_exact_label_match",
+        "layer1_brand_trust_score",
+        "official_anchor_with_https",
+        "legit_auth_surface_on_official_anchor",
+        "legit_admin_like_path_on_official_anchor",
+        "legit_checkout_like_path_on_official_anchor",
+        "path_shallow_le1",
+        "path_shallow_le2",
+        "no_authish_path_query_tokens",
+        "simple_public_web_shape",
+        "simple_official_homepage_shape",
+    }
+    https_mismatch_increase = {"https_without_official_anchor"}
+    phish_risk_increase = {
+        "suspicious_redirect_query_flag",
+        "path_query_authish_keyword_hits",
+        "path_segment_count",
+    }
+    return tuple(
+        -1
+        if c in trust_decrease
+        else 1
+        if c in https_mismatch_increase or c in phish_risk_increase
+        else 0
+        for c in num_cols
+    )
+
+
 def _make_pipeline(model: Any, num_cols: List[str], cat_cols: List[str]) -> Pipeline:
     transformers: List[Tuple[str, Any, List[str]]] = []
     if num_cols:
@@ -142,11 +194,60 @@ def _make_pipeline(model: Any, num_cols: List[str], cat_cols: List[str]) -> Pipe
     return Pipeline(steps=[("prep", pre), ("model", model)])
 
 
+def _mean_phish_proba_official_anchor_rows(pipe: Pipeline, X_te: pd.DataFrame) -> Any:
+    """Mean P(phish) on test rows with ``official_registrable_anchor==1`` (realistic corp hosts in holdout)."""
+    if "official_registrable_anchor" not in X_te.columns:
+        return None
+    mask = pd.to_numeric(X_te["official_registrable_anchor"], errors="coerce").fillna(0).astype(int) == 1
+    if not bool(mask.any()):
+        return None
+    try:
+        X_sub = X_te.loc[mask]
+        P = pipe.predict_proba(X_sub)
+        cls = np.asarray(pipe.classes_)
+        ph = np.array([phish_probability_from_proba_row(P[i], cls) for i in range(len(P))])
+        return float(np.mean(ph))
+    except Exception:
+        return None
+
+
+def _audit_official_https_mean_phish(pipe: Pipeline, feature_columns: List[str]) -> float:
+    """Mean raw P(phish) on a few canonical official HTTPS URLs (OOD vs Kaggle http-heavy benign rows)."""
+    from src.app_v1.ml_layer1 import build_layer1_frame
+
+    probs: List[float] = []
+    for url in LAYER1_OFFICIAL_HTTPS_AUDIT_URLS:
+        X_raw, _, _ = build_layer1_frame(url, use_dns=False)
+        for c in feature_columns:
+            if c not in X_raw.columns:
+                X_raw[c] = np.nan
+        X = X_raw[feature_columns]
+        P = pipe.predict_proba(X)[0]
+        cls = np.asarray(pipe.classes_)
+        probs.append(phish_probability_from_proba_row(P, cls))
+    return float(np.mean(probs))
+
+
+def _pick_layer1_primary_model(metrics_all: List[Dict[str, Any]]) -> str:
+    """Maximize F1 minus audit-URL mean phish (balances accuracy vs embarrassing false positives on big brands)."""
+    if not metrics_all:
+        raise ValueError("metrics_all empty")
+
+    def composite(m: Dict[str, Any]) -> float:
+        f1 = m.get("f1") or 0.0
+        audit = m.get("audit_official_https_mean_phish_proba")
+        return f1 if audit is None else f1 - float(audit)
+
+    return str(max(metrics_all, key=composite)["model"])
+
+
 def _evaluate(name: str, pipe: Pipeline, X_te: pd.DataFrame, y_te: np.ndarray) -> Dict[str, Any]:
     pred = pipe.predict(X_te)
     proba = None
     try:
-        proba = pipe.predict_proba(X_te)[:, 1]
+        P = pipe.predict_proba(X_te)
+        cls = np.asarray(pipe.classes_)
+        proba = np.array([phish_probability_from_proba_row(P[i], cls) for i in range(len(P))])
     except Exception:
         proba = None
     out: Dict[str, Any] = {"model": name}
@@ -162,6 +263,7 @@ def _evaluate(name: str, pipe: Pipeline, X_te: pd.DataFrame, y_te: np.ndarray) -
     else:
         out["roc_auc"] = None
     out["confusion_matrix"] = confusion_matrix(y_te, pred).tolist()
+    out["test_mean_phish_proba_official_anchor_rows"] = _mean_phish_proba_official_anchor_rows(pipe, X_te)
     return out
 
 
@@ -175,7 +277,9 @@ def _export_misclassifications(
     pred = pipe.predict(X_te)
     proba = None
     try:
-        proba = pipe.predict_proba(X_te)[:, 1]
+        P = pipe.predict_proba(X_te)
+        cls = np.asarray(pipe.classes_)
+        proba = np.array([phish_probability_from_proba_row(P[i], cls) for i in range(len(P))])
     except Exception:
         pass
     wrong = pred != y_te
@@ -270,16 +374,19 @@ def train(
     try:
         from xgboost import XGBClassifier
 
-        models["xgboost"] = XGBClassifier(
-            n_estimators=200,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=0.9,
-            colsample_bytree=0.9,
-            eval_metric="logloss",
-            random_state=random_state,
-            n_jobs=-1,
-        )
+        xgb_kw: Dict[str, Any] = {
+            "n_estimators": 200,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "eval_metric": "logloss",
+            "random_state": random_state,
+            "n_jobs": -1,
+        }
+        if layer1_only and not cat_cols:
+            xgb_kw["monotone_constraints"] = _xgb_monotone_decreasing_trust(num_cols)
+        models["xgboost"] = XGBClassifier(**xgb_kw)
     except Exception:
         logger.info("XGBoost not installed; skipping.")
     try:
@@ -300,6 +407,12 @@ def train(
 
     metrics_all: List[Dict[str, Any]] = []
     training_meta = {
+        "label_semantics": {
+            "legitimate_class": 0,
+            "phishing_class": 1,
+            "kaggle_raw": "1=legitimate, 0=phishing → mapped via kaggle_status_to_internal",
+            "inference": "Use Pipeline.classes_ with phishing_class for predict_proba column; do not assume column order.",
+        },
         "exclude_fetch_proxy_features": exclude_fetch_proxy_features,
         "layer1_only": layer1_only,
         "layer1_include_dns": layer1_include_dns if layer1_only else None,
@@ -320,6 +433,14 @@ def train(
             if c in full.columns
         ],
         "feature_columns_used": list(X.columns),
+        "layer1_primary_selection": (
+            "Argmax over fitted models of (f1 - audit_official_https_mean_phish_proba); "
+            "audit_* is mean raw P(phish) on layer1_official_https_audit_urls only (model choice, not runtime rules)."
+            if layer1_only
+            else None
+        ),
+        "layer1_official_https_audit_urls": list(LAYER1_OFFICIAL_HTTPS_AUDIT_URLS) if layer1_only else None,
+        "layer1_dropped_from_training_features": sorted(LAYER1_EXCLUDE_FROM_X) if layer1_only else None,
     }
     (reports_dir() / "training_config.json").write_text(json.dumps(training_meta, indent=2), encoding="utf-8")
 
@@ -328,6 +449,11 @@ def train(
         logger.info("Fitting %s …", name)
         pipe.fit(X_tr, y_tr)
         m = _evaluate(name, pipe, X_test, y_test)
+        try:
+            m["audit_official_https_mean_phish_proba"] = _audit_official_https_mean_phish(pipe, list(X.columns))
+        except Exception as ex:
+            logger.warning("Audit-URL mean phish skipped: %s", ex)
+            m["audit_official_https_mean_phish_proba"] = None
         metrics_all.append(m)
         joblib.dump(pipe, models_dir() / f"{name}.joblib")
 
@@ -358,6 +484,12 @@ def train(
     pd.DataFrame(metrics_all).to_csv(metrics_dir() / "metrics_summary.csv", index=False)
 
     best = max(metrics_all, key=lambda m: m.get("f1") or 0)
+    if layer1_only:
+        try:
+            primary_name = _pick_layer1_primary_model(metrics_all)
+            best = next(m for m in metrics_all if m["model"] == primary_name)
+        except (ValueError, StopIteration):
+            best = max(metrics_all, key=lambda m: m.get("f1") or 0)
     try:
         import matplotlib.pyplot as plt
 
@@ -380,13 +512,85 @@ def train(
 
     logger.info("Training complete. Metrics -> %s", metrics_path)
     if layer1_only and metrics_all:
-        best_name = max(metrics_all, key=lambda m: m.get("f1") or 0)["model"]
+        best_name = _pick_layer1_primary_model(metrics_all)
         src = models_dir() / f"{best_name}.joblib"
         dst = models_dir() / "layer1_primary.joblib"
         if src.is_file():
             dst.write_bytes(src.read_bytes())
-            logger.info("Copied best Layer-1 model %s -> %s", best_name, dst)
+            row = next((m for m in metrics_all if m["model"] == best_name), {})
+            logger.info(
+                "Layer-1 primary -> %s (F1=%s, official_anchor_rows_mean_phish=%s)",
+                best_name,
+                row.get("f1"),
+                row.get("test_mean_phish_proba_official_anchor_rows"),
+            )
+        _maybe_fit_layer1_probability_calibrator(X_val, y_val, X_test, y_test)
     return metrics_path
+
+
+def _maybe_fit_layer1_probability_calibrator(
+    X_val: pd.DataFrame,
+    y_val: np.ndarray,
+    X_test: pd.DataFrame,
+    y_test: np.ndarray,
+) -> None:
+    """Fit isotonic (fallback: Platt LR) on validation raw P(phish); persist for inference."""
+    primary_path = models_dir() / "layer1_primary.joblib"
+    if not primary_path.is_file():
+        return
+    try:
+        from sklearn.isotonic import IsotonicRegression
+        from sklearn.linear_model import LogisticRegression as LRPlatt
+
+        pipe = joblib.load(primary_path)
+        Pv = pipe.predict_proba(X_val)
+        cls = np.asarray(pipe.classes_)
+        raw_val = np.array([phish_probability_from_proba_row(Pv[i], cls) for i in range(len(Pv))])
+        ctype = "isotonic"
+        cal_model: Any = None
+        try:
+            iso = IsotonicRegression(out_of_bounds="clip")
+            iso.fit(raw_val, y_val)
+            _ = iso.predict(raw_val)
+            cal_model = iso
+        except Exception as ex_iso:
+            logger.warning("Isotonic calibration skipped (%s); using Platt LR on val scores.", ex_iso)
+            lr = LRPlatt(max_iter=500, class_weight="balanced")
+            lr.fit(raw_val.reshape(-1, 1), y_val)
+            cal_model = lr
+            ctype = "platt"
+
+        Pt = pipe.predict_proba(X_test)
+        raw_te = np.array([phish_probability_from_proba_row(Pt[i], cls) for i in range(len(Pt))])
+        if ctype == "isotonic":
+            cal_te = np.clip(cal_model.predict(raw_te), 0.0, 1.0)
+        else:
+            cal_te = np.clip(cal_model.predict_proba(raw_te.reshape(-1, 1))[:, 1], 0.0, 1.0)
+
+        cal_path = models_dir() / "layer1_probability_calibrator.joblib"
+        joblib.dump({"type": ctype, "model": cal_model, "fitted_on": "train_val_split_holdout"}, cal_path)
+
+        b_raw = float(brier_score_loss(y_test, raw_te))
+        b_cal = float(brier_score_loss(y_test, cal_te))
+        rep = {
+            "calibrator_type": ctype,
+            "path": str(cal_path),
+            "brier_test_raw_layer1_primary": b_raw,
+            "brier_test_calibrated": b_cal,
+        }
+        (reports_dir() / "layer1_calibration_report.json").write_text(
+            json.dumps(rep, indent=2),
+            encoding="utf-8",
+        )
+        cfgp = reports_dir() / "training_config.json"
+        if cfgp.is_file():
+            tc = json.loads(cfgp.read_text(encoding="utf-8"))
+            tc["layer1_probability_calibrator"] = cal_path.name
+            tc["layer1_calibration_report"] = rep
+            cfgp.write_text(json.dumps(tc, indent=2), encoding="utf-8")
+        logger.info("Layer-1 probability calibration -> %s (Brier raw=%.4f cal=%.4f)", ctype, b_raw, b_cal)
+    except Exception as ex:
+        logger.warning("Layer-1 probability calibration failed: %s", ex)
 
 
 def main() -> None:
