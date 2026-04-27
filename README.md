@@ -88,6 +88,38 @@ python -m src.app_v1.analyze_dashboard --url "https://example.com"
 
 Frontend guide: `docs/FRONTEND_GUIDE.md`.
 
+## Optional Language Detection (fastText)
+
+The dashboard includes an optional fastText page-language enrichment used as a **contextual signal only**.  
+It is not a core phishing verdict driver and does not change model training or thresholds.
+
+Download the language ID model (`lid.176.ftz`) into `./models/`:
+
+```bash
+pip install fasttext
+python -m src.app_v1.utils.download_models --fasttext
+```
+
+Environment variable (optional):
+
+```bash
+export PHISH_FASTTEXT_LID_MODEL=/absolute/path/to/lid.176.ftz
+```
+
+Behavior:
+
+- If `PHISH_FASTTEXT_LID_MODEL` is set, that path is used.
+- If not set, the app falls back to `./models/lid.176.ftz`.
+- If no model is found (or `fasttext` is not installed), analysis continues normally and language detection is marked unavailable.
+
+## Legitimacy Rescue Layer
+
+The system includes a generalized legitimacy rescue guard (post-ML, pre-final-verdict) to reduce false positives when structural legitimacy evidence is strong and phishing blockers are absent.
+
+For deployment configuration, trusted-domain registry format, and operational safety notes, see:
+
+- `docs/DEPLOYMENT_NOTES.md`
+
 ## Dashboard Sections (What They Mean)
 
 - **Verdict**: final label/confidence/combined score with reasons.

@@ -91,6 +91,14 @@ _SUBMIT_BUTTON_NAME_PATTERNS: List[re.Pattern[str]] = [
     re.compile(r"\bverify\b", re.I),
 ]
 
+_CLICK_PROBE_PATTERNS: List[re.Pattern[str]] = [
+    re.compile(r"\blogin\b", re.I),
+    re.compile(r"sign\s*in", re.I),
+    re.compile(r"\bcontinue\b", re.I),
+    re.compile(r"\bverify\b", re.I),
+    re.compile(r"\bnext\b", re.I),
+]
+
 
 # Labels for first_failed_capture_step and NotImplementedError messages (stable, human-readable).
 STEP_SYNC_PLAYWRIGHT = "sync_playwright context"
@@ -436,6 +444,106 @@ def _run_optional_login_interaction(
     return meta
 
 
+def _iter_click_probe_candidates(page: Any) -> List[tuple[Locator, str]]:
+    """Collect visible controls whose text matches safe probe patterns (order stable)."""
+    out: List[tuple[Locator, str]] = []
+    selectors = [
+        'button:visible',
+        'a:visible',
+        'input[type="button"]:visible',
+        'input[type="submit"]:visible',
+        '[role="button"]:visible',
+    ]
+    for sel in selectors:
+        try:
+            loc = page.locator(sel)
+            n = min(_safe_locator_count(loc), 20)
+            for i in range(n):
+                candidate = loc.nth(i)
+                txt = ""
+                try:
+                    txt = (candidate.inner_text(timeout=300) or "").strip()
+                except Exception:
+                    try:
+                        txt = (candidate.get_attribute("value") or "").strip()
+                    except Exception:
+                        txt = ""
+                if not txt:
+                    continue
+                if any(p.search(txt) for p in _CLICK_PROBE_PATTERNS):
+                    out.append((candidate, txt[:120]))
+        except PlaywrightError:
+            continue
+    return out
+
+
+def _find_click_probe_control(page: Any) -> tuple[Optional[Locator], Optional[str]]:
+    """Return first visible safe click target and its text (best effort)."""
+    found = _iter_click_probe_candidates(page)
+    if not found:
+        return None, None
+    loc, txt = found[0]
+    return loc, txt
+
+
+def _run_optional_click_probe(
+    page: Any,
+    cfg: PipelineConfig,
+    first_fail: list[Optional[str]],
+    last_step: Optional[list[Optional[str]]],
+) -> CaptureInteractionMetadata:
+    """Safe click probe: one click only, no typing."""
+    meta = CaptureInteractionMetadata()
+    meta.click_probe_enabled = bool(cfg.enable_click_probe)
+    if not cfg.enable_click_probe:
+        meta.click_probe_skip_reason = "disabled_by_config"
+        meta.click_probe_attempted = False
+        meta.click_probe_candidate_count = 0
+        meta.click_probe_candidate_texts_sample = []
+        return meta
+    try:
+        candidates = _iter_click_probe_candidates(page)
+    except Exception:  # noqa: BLE001 — probe must never fail the pipeline
+        meta.click_probe_skip_reason = "html_or_page_unavailable"
+        meta.click_probe_attempted = False
+        meta.click_probe_candidate_count = 0
+        meta.click_probe_candidate_texts_sample = []
+        return meta
+
+    meta.click_probe_candidate_count = len(candidates)
+    meta.click_probe_candidate_texts_sample = [t for _, t in candidates[:5]]
+    meta.click_probe_attempted = True
+    if not candidates:
+        meta.click_probe_skip_reason = "no_visible_candidate"
+        return meta
+
+    target, txt = candidates[0]
+    meta.click_probe_text = txt
+    meta.click_probe_before_url = page.url
+    try:
+        with _capture_step(logger, STEP_INTERACTION_NAV, last_step):
+            target.click(timeout=min(5000, max(2000, cfg.navigation_timeout_ms // 6)))
+        _stabilize_after_load_ms(max(0, cfg.post_submit_stabilize_ms))
+        with _capture_step(logger, STEP_INTERACTION_URL_AFTER, last_step):
+            meta.click_probe_after_url = page.url
+        meta.click_probe_domain_changed = bool(
+            _host(meta.click_probe_before_url or "") and _host(meta.click_probe_after_url or "")
+            and _host(meta.click_probe_before_url or "") != _host(meta.click_probe_after_url or "")
+        )
+        meta.click_probe_skip_reason = None
+    except PlaywrightTimeoutError as exc:  # noqa: BLE001
+        sub = last_step[0] if last_step else STEP_OPTIONAL_INTERACTION
+        _note_first_failure(first_fail, sub)
+        meta.click_probe_skip_reason = "candidate_not_clickable"
+        meta.click_probe_error = _format_capture_exception(exc, substep=sub)
+    except Exception as exc:  # noqa: BLE001
+        sub = last_step[0] if last_step else STEP_OPTIONAL_INTERACTION
+        _note_first_failure(first_fail, sub)
+        meta.click_probe_skip_reason = "probe_error"
+        meta.click_probe_error = _format_capture_exception(exc, substep=sub)
+    return meta
+
+
 def _http_fetch_html(url: str, timeout_s: float) -> tuple[str, str]:
     """Fetch raw HTML via HTTP(S). Returns (final_url, html). Raises on failure."""
     ua = _random_user_agent(_STEALTH_USER_AGENTS[0])
@@ -722,6 +830,10 @@ def _playwright_full_capture(
                         interaction = _run_optional_login_interaction(
                             page, cfg, slug, output_dir, first_fail, last_step
                         )
+                        probe = _run_optional_click_probe(page, cfg, first_fail, last_step)
+                        for k, v in probe.as_json().items():
+                            if k.startswith("click_probe"):
+                                setattr(interaction, k, v)
                     detected_language, language_source = _language_from_html_or_text(
                         html, visible_text
                     )

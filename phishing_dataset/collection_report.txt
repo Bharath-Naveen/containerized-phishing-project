@@ -1,0 +1,59 @@
+============================================================
+PHISHING DATASET COLLECTION REPORT
+Generated: 2026-04-26 14:59:25
+============================================================
+
+OVERALL COUNTS
+  Total URLs         : 582
+  Phishing  (label=1): 284
+  Legitimate (label=0): 298
+
+SPLITS
+  Train              : 226
+  Test (standard)    : 56
+  Test (recent HO)   : 300
+
+SOURCES
+  brand_official           : 298
+  phishstats               : 284
+
+PER-BRAND BREAKDOWN
+------------------------------------------------------------
+  adobe                phish=  15  legit=  15  total=   30
+  amazon               phish=  15  legit=  15  total=   30
+  amex                 phish=  15  legit=  15  total=   30
+  apple                phish=  15  legit=  15  total=   30
+  bankofamerica        phish=  15  legit=  15  total=   30
+  chase                phish=  15  legit=  15  total=   30
+  coinbase             phish=  15  legit=  15  total=   30
+  dhl                  phish=  15  legit=  15  total=   30
+  docusign             phish=  15  legit=  15  total=   30
+  dropbox              phish=   0  legit=  14  total=   14
+  facebook             phish=  15  legit=  15  total=   30
+  fedex                phish=  15  legit=  15  total=   30
+  google               phish=  15  legit=  15  total=   30
+  instagram            phish=  14  legit=  14  total=   28
+  linkedin             phish=  15  legit=  15  total=   30
+  microsoft            phish=  15  legit=  15  total=   30
+  netflix              phish=  15  legit=  15  total=   30
+  paypal               phish=  15  legit=  15  total=   30
+  usps                 phish=  15  legit=  15  total=   30
+  wellsfargo           phish=  15  legit=  15  total=   30
+
+DATA QUALITY NOTES
+  - Exact URL deduplication applied
+  - Domain-level cap: max 10 URLs per registered domain per class
+  - Split is by registered domain (no domain leakage across splits)
+  - Recent holdout = top 10% by collection_date
+  - Run head-request liveness check before feature extraction
+  - Cross-check legitimate URLs with Google Safe Browsing before use
+
+NEXT STEPS
+  1. Run your feature extractor on dataset_train.csv
+  2. Evaluate on dataset_test_standard.csv
+  3. Final held-out eval on dataset_test_recent.csv (DO NOT peek!)
+  4. For more phishing data: get PhishTank API key from phishtank.org
+     and pass PHISHTANK_DB_PATH to load_phishtank_db()
+  5. For more legit data: download Tranco top-1m from tranco-list.eu
+     and pass TRANCO_CSV_PATH to load_tranco()
+============================================================

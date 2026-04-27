@@ -1,0 +1,28 @@
+{
+  "obvious_legit": [
+    "https://www.google.com/",
+    "https://www.amazon.com/",
+    "https://www.wikipedia.org/",
+    "https://www.nih.gov/",
+    "https://www.python.org/",
+    "https://www.mozilla.org/"
+  ],
+  "tricky_legit": [
+    "https://accounts.google.com/signin",
+    "https://login.microsoftonline.com/",
+    "https://www.paypal.com/signin",
+    "https://www.amazon.com/ap/signin",
+    "https://github.com/login",
+    "https://appleid.apple.com/"
+  ],
+  "obvious_phish": [
+    "http://192.168.0.1/login.php",
+    "https://totally-fake-bank-login.xyz/verify"
+  ],
+  "hard_phishing": [
+    "https://google-login-secure.xyz/signin",
+    "https://paypal-verification-help.netlify.app/",
+    "https://microsoft-login-support.github.io/",
+    "https://amazon.secure-update-login.co/"
+  ]
+}

@@ -1,0 +1,61 @@
+============================================================
+PHISHING DATASET COLLECTION REPORT
+Generated: 2026-04-26 14:35:59
+============================================================
+
+OVERALL COUNTS
+  Total URLs         : 20,000
+  Phishing  (label=1): 10,000
+  Legitimate (label=0): 10,000
+
+SPLITS
+  Train              : 7,959
+  Test (standard)    : 1,990
+  Test (recent HO)   : 10,051
+
+SOURCES
+  brand_official           : 10,000
+  phishtank                : 3,353
+  openphish                : 3,340
+  phishstats               : 3,307
+
+PER-BRAND BREAKDOWN
+------------------------------------------------------------
+  adobe                phish= 500  legit= 500  total= 1000
+  amazon               phish= 500  legit= 500  total= 1000
+  amex                 phish= 500  legit= 500  total= 1000
+  apple                phish= 500  legit= 500  total= 1000
+  bankofamerica        phish= 500  legit= 500  total= 1000
+  chase                phish= 500  legit= 500  total= 1000
+  coinbase             phish= 500  legit= 500  total= 1000
+  dhl                  phish= 500  legit= 500  total= 1000
+  docusign             phish= 500  legit= 500  total= 1000
+  dropbox              phish= 500  legit= 500  total= 1000
+  facebook             phish= 500  legit= 500  total= 1000
+  fedex                phish= 500  legit= 500  total= 1000
+  google               phish= 500  legit= 500  total= 1000
+  instagram            phish= 500  legit= 500  total= 1000
+  linkedin             phish= 500  legit= 500  total= 1000
+  microsoft            phish= 500  legit= 500  total= 1000
+  netflix              phish= 500  legit= 500  total= 1000
+  paypal               phish= 500  legit= 500  total= 1000
+  usps                 phish= 500  legit= 500  total= 1000
+  wellsfargo           phish= 500  legit= 500  total= 1000
+
+DATA QUALITY NOTES
+  - Exact URL deduplication applied
+  - Domain-level cap: max 10 URLs per registered domain per class
+  - Split is by registered domain (no domain leakage across splits)
+  - Recent holdout = top 10% by collection_date
+  - Run head-request liveness check before feature extraction
+  - Cross-check legitimate URLs with Google Safe Browsing before use
+
+NEXT STEPS
+  1. Run your feature extractor on dataset_train.csv
+  2. Evaluate on dataset_test_standard.csv
+  3. Final held-out eval on dataset_test_recent.csv (DO NOT peek!)
+  4. For more phishing data: get PhishTank API key from phishtank.org
+     and pass PHISHTANK_DB_PATH to load_phishtank_db()
+  5. For more legit data: download Tranco top-1m from tranco-list.eu
+     and pass TRANCO_CSV_PATH to load_tranco()
+============================================================

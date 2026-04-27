@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Literal, Set, Tuple
 
 import joblib
 import numpy as np
@@ -33,6 +33,7 @@ from src.pipeline.layer1_features import layer1_feature_key_set
 from src.pipeline.paths import ensure_layout, figures_dir, metrics_dir, models_dir, processed_dir, reports_dir
 
 logger = logging.getLogger(__name__)
+PrimarySelectionPolicy = Literal["composite", "f1", "roc_auc"]
 
 # Proxy features that often encode “fetch worked” vs “dead domain” more than page semantics.
 FETCH_PROXY_FEATURES: Set[str] = {
@@ -229,16 +230,38 @@ def _audit_official_https_mean_phish(pipe: Pipeline, feature_columns: List[str])
 
 
 def _pick_layer1_primary_model(metrics_all: List[Dict[str, Any]]) -> str:
-    """Maximize F1 minus audit-URL mean phish (balances accuracy vs embarrassing false positives on big brands)."""
+    """Backward-compatible selector: composite policy."""
+    return _pick_layer1_primary_model_by_policy(metrics_all, policy="composite")
+
+
+def _pick_layer1_primary_model_by_policy(
+    metrics_all: List[Dict[str, Any]],
+    *,
+    policy: PrimarySelectionPolicy = "composite",
+) -> str:
+    """Pick layer1 primary model under a configurable selection policy."""
     if not metrics_all:
         raise ValueError("metrics_all empty")
 
-    def composite(m: Dict[str, Any]) -> float:
+    if policy not in {"composite", "f1", "roc_auc"}:
+        raise ValueError(f"Unsupported primary selection policy: {policy}")
+
+    def composite_score(m: Dict[str, Any]) -> float:
         f1 = m.get("f1") or 0.0
         audit = m.get("audit_official_https_mean_phish_proba")
         return f1 if audit is None else f1 - float(audit)
 
-    return str(max(metrics_all, key=composite)["model"])
+    if policy == "composite":
+        return str(max(metrics_all, key=composite_score)["model"])
+    if policy == "f1":
+        return str(max(metrics_all, key=lambda m: float(m.get("f1") or 0.0))["model"])
+    # policy == "roc_auc"
+    return str(
+        max(
+            metrics_all,
+            key=lambda m: (float(m.get("roc_auc") or -1.0), float(m.get("f1") or 0.0)),
+        )["model"]
+    )
 
 
 def _evaluate(name: str, pipe: Pipeline, X_te: pd.DataFrame, y_te: np.ndarray) -> Dict[str, Any]:
@@ -307,6 +330,8 @@ def train(
     exclude_fetch_proxy_features: bool = True,
     layer1_only: bool = False,
     layer1_include_dns: bool = False,
+    primary_selection: PrimarySelectionPolicy = "composite",
+    write_primary_artifact: bool = True,
 ) -> Path:
     ensure_layout()
     tr_path = train_csv or (processed_dir() / "train.csv")
@@ -434,11 +459,14 @@ def train(
         ],
         "feature_columns_used": list(X.columns),
         "layer1_primary_selection": (
-            "Argmax over fitted models of (f1 - audit_official_https_mean_phish_proba); "
+            "Policy-based selection over fitted models. "
+            "composite = argmax(f1 - audit_official_https_mean_phish_proba); "
+            "f1 = argmax(f1); roc_auc = argmax(roc_auc, then f1 tie-break). "
             "audit_* is mean raw P(phish) on layer1_official_https_audit_urls only (model choice, not runtime rules)."
             if layer1_only
             else None
         ),
+        "layer1_primary_selection_policy": primary_selection if layer1_only else None,
         "layer1_official_https_audit_urls": list(LAYER1_OFFICIAL_HTTPS_AUDIT_URLS) if layer1_only else None,
         "layer1_dropped_from_training_features": sorted(LAYER1_EXCLUDE_FROM_X) if layer1_only else None,
     }
@@ -486,7 +514,10 @@ def train(
     best = max(metrics_all, key=lambda m: m.get("f1") or 0)
     if layer1_only:
         try:
-            primary_name = _pick_layer1_primary_model(metrics_all)
+            primary_name = _pick_layer1_primary_model_by_policy(
+                metrics_all,
+                policy=primary_selection,
+            )
             best = next(m for m in metrics_all if m["model"] == primary_name)
         except (ValueError, StopIteration):
             best = max(metrics_all, key=lambda m: m.get("f1") or 0)
@@ -512,19 +543,28 @@ def train(
 
     logger.info("Training complete. Metrics -> %s", metrics_path)
     if layer1_only and metrics_all:
-        best_name = _pick_layer1_primary_model(metrics_all)
+        best_name = _pick_layer1_primary_model_by_policy(metrics_all, policy=primary_selection)
         src = models_dir() / f"{best_name}.joblib"
-        dst = models_dir() / "layer1_primary.joblib"
-        if src.is_file():
+        row = next((m for m in metrics_all if m["model"] == best_name), {})
+        if write_primary_artifact and src.is_file():
+            dst = models_dir() / "layer1_primary.joblib"
             dst.write_bytes(src.read_bytes())
-            row = next((m for m in metrics_all if m["model"] == best_name), {})
             logger.info(
-                "Layer-1 primary -> %s (F1=%s, official_anchor_rows_mean_phish=%s)",
+                "Layer-1 primary (%s policy) -> %s (F1=%s, ROC-AUC=%s, official_anchor_rows_mean_phish=%s)",
+                primary_selection,
                 best_name,
                 row.get("f1"),
+                row.get("roc_auc"),
                 row.get("test_mean_phish_proba_official_anchor_rows"),
             )
-        _maybe_fit_layer1_probability_calibrator(X_val, y_val, X_test, y_test)
+            _maybe_fit_layer1_probability_calibrator(X_val, y_val, X_test, y_test)
+        else:
+            logger.info(
+                "Layer-1 primary candidate (%s policy) = %s; write_primary_artifact=%s so layer1_primary.joblib unchanged.",
+                primary_selection,
+                best_name,
+                write_primary_artifact,
+            )
     return metrics_path
 
 
@@ -617,6 +657,17 @@ def main() -> None:
         action="store_true",
         help="With --layer1-only, allow DNS columns (must match enrichment).",
     )
+    p.add_argument(
+        "--primary-selection",
+        choices=["composite", "f1", "roc_auc"],
+        default="composite",
+        help="Policy to choose layer1_primary.joblib when --layer1-only is active.",
+    )
+    p.add_argument(
+        "--no-write-primary",
+        action="store_true",
+        help="Do not overwrite outputs/models/layer1_primary.joblib; useful for policy comparisons.",
+    )
     args = p.parse_args()
     train(
         args.train,
@@ -625,6 +676,8 @@ def main() -> None:
         exclude_fetch_proxy_features=not args.include_fetch_proxy_features,
         layer1_only=args.layer1_only,
         layer1_include_dns=args.layer1_include_dns,
+        primary_selection=args.primary_selection,
+        write_primary_artifact=not args.no_write_primary,
     )
 
 
