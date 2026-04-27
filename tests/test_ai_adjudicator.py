@@ -125,3 +125,37 @@ def test_high_legit_content_rescue_boost_applies_when_safe() -> None:
     )
     assert out["high_legit_content_down_boost_applied"] is True
     assert out["adjustment_applied"] < 0.0
+
+
+def test_ai_assessment_likely_legitimate_forces_downward_adjustment_direction() -> None:
+    cfg = Verdict3WayConfig(combined_low=0.38, combined_high=0.56)
+    out = apply_ai_adjustment(
+        pre_ai_score=0.52,
+        pre_ai_verdict="uncertain",
+        ai_result={
+            "ai_assessment": "likely_legitimate",
+            "adjustment_direction": "up",
+            "adjustment_magnitude": 0.12,
+            "ai_confidence": "medium",
+        },
+        adjudication_context={},
+        verdict_cfg=cfg,
+    )
+    assert float(out["post_ai_score"]) < float(out["pre_ai_score"])
+
+
+def test_ai_assessment_likely_phishing_forces_upward_adjustment_direction() -> None:
+    cfg = Verdict3WayConfig(combined_low=0.38, combined_high=0.56)
+    out = apply_ai_adjustment(
+        pre_ai_score=0.48,
+        pre_ai_verdict="uncertain",
+        ai_result={
+            "ai_assessment": "likely_phishing",
+            "adjustment_direction": "down",
+            "adjustment_magnitude": 0.10,
+            "ai_confidence": "medium",
+        },
+        adjudication_context={},
+        verdict_cfg=cfg,
+    )
+    assert float(out["post_ai_score"]) > float(out["pre_ai_score"])

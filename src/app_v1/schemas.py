@@ -25,6 +25,16 @@ class CaptureInteractionMetadata:
     navigation_occurred: bool = False
     post_submit_viewport_screenshot_path: Optional[str] = None
     interaction_error: Optional[str] = None
+    click_probe_attempted: bool = False
+    click_probe_text: Optional[str] = None
+    click_probe_before_url: Optional[str] = None
+    click_probe_after_url: Optional[str] = None
+    click_probe_domain_changed: Optional[bool] = None
+    click_probe_error: Optional[str] = None
+    click_probe_enabled: bool = False
+    click_probe_candidate_count: int = 0
+    click_probe_candidate_texts_sample: List[str] = field(default_factory=list)
+    click_probe_skip_reason: Optional[str] = None
 
     def as_json(self) -> Dict[str, Any]:
         return asdict(self)
