@@ -7,6 +7,7 @@ from src.app_v1.analyze_dashboard import (
     _apply_legitimacy_rescue_on_verdict,
     _detect_cloud_hosted_brand_impersonation,
     _evaluate_hosting_domain_trust,
+    _load_official_domain_trust_prior_registry,
 )
 from src.app_v1.config import PipelineConfig
 from src.app_v1.verdict_policy import Verdict3WayConfig
@@ -471,6 +472,30 @@ def test_platform_context_microsoft_github_pages_is_cloud_impersonation() -> Non
         cfg=_cfg(),
     )
     assert ctx["platform_context_type"] == "cloud_hosted_brand_impersonation"
+
+
+def test_platform_context_unifiedmentor_podia_404_is_creator_candidate() -> None:
+    ctx = _classify_platform_host_context(
+        layer2_capture={
+            "final_url": "https://unifiedmentor.podia.com/404",
+            "final_registered_domain": "podia.com",
+            "title": "404 Not Found - Unified Mentor",
+            "visible_text_sample": "Visit unifiedmentor.com for updates and newsletter",
+        },
+        html_dom_enrichment={},
+        host_path_reasoning={"host_identity_class": "known_platform_official"},
+        cfg=_cfg(),
+    )
+    assert ctx["platform_context_type"] in {"creator_platform_404_or_inactive", "platform_hosted_legitimate_candidate"}
+
+
+def test_official_domain_registry_uses_root_domains_not_aws_azure_subdomains() -> None:
+    reg = _load_official_domain_trust_prior_registry()
+    roots = set(reg.get("root_domains") or set())
+    assert "amazon.com" in roots
+    assert "microsoft.com" in roots
+    assert "aws.amazon.com" not in roots
+    assert "azure.microsoft.com" not in roots
 
 
 def test_platform_context_unknown_inactive_page_stays_uncertain_with_inactive_tag() -> None:

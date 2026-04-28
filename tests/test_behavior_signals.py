@@ -1,7 +1,10 @@
-﻿from pathlib import Path
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from src.app_v1.analyze_dashboard import _apply_evidence_adjudication_layer
+from src.app_v1.analyze_dashboard import build_dashboard_analysis
 from src.app_v1.behavior_signals import extract_behavior_signals
+from src.app_v1.schemas import CaptureResult
 
 
 def _base_verdict(score: float = 0.55) -> dict:
@@ -120,6 +123,7 @@ def test_benign_analytics_and_cdn_not_exfiltration(tmp_path: Path) -> None:
         html_dom_summary={"form_action_external_domain_count": 0, "page_family": "generic_landing"},
         platform_context_type="official_platform_domain",
     )
+    assert beh["network_request_domain_count"] > 0
     assert beh["network_exfiltration_suspected"] is False
     assert not beh["network_unrelated_domains"]
 
@@ -185,3 +189,37 @@ def test_impersonation_with_suspicious_behavior_stays_likely_phishing(tmp_path: 
         legitimacy_bundle={},
     )
     assert out["verdict_3way"] == "likely_phishing"
+
+
+def test_build_dashboard_analysis_uses_network_request_urls_for_behavior_signals() -> None:
+    fake_cap = CaptureResult(
+        original_url="https://example.com",
+        final_url="https://example.com",
+        title="Example",
+        screenshot_path="",
+        fullpage_screenshot_path="",
+        html_path="",
+        visible_text="Example",
+        capture_strategy="http_fallback",
+        network_request_urls=[
+            "https://www.googletagmanager.com/gtm.js",
+            "https://evil-tracker.bad/collect",
+        ],
+    )
+    fake_ml = {
+        "phish_proba": 0.4,
+        "phish_proba_model_raw": 0.4,
+        "phish_proba_calibrated": 0.4,
+        "predicted_phishing": False,
+        "canonical_url": "https://example.com",
+        "brand_structure_features": {},
+        "error": None,
+    }
+    cfg = MagicMock()
+    cfg.enable_click_probe = False
+    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake_cap):
+            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+                out, _ = build_dashboard_analysis("https://example.com", reinforcement=True)
+    behavior = out.get("behavior_signals") or {}
+    assert behavior.get("network_request_domain_count", 0) >= 2

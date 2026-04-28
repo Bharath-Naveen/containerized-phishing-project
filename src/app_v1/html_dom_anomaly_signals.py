@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
@@ -389,10 +390,18 @@ def extract_html_dom_anomaly_signals(
     p_tag_count = len(soup.find_all("p"))
     word_count = len(body_text.split())
 
-    interstitial_or_preview_pattern = any(m in low_body for m in _INTERSTITIAL_MARKERS)
+    interstitial_marker_text_present = any(m in low_body for m in _INTERSTITIAL_MARKERS)
     redirect_countdown_phrase_present = any(m in low_body for m in _COUNTDOWN_MARKERS)
     continue_to_destination_phrase_present = any(m in low_body for m in _CONTINUE_DEST)
     destination_preview_phrase_present = any(m in low_body for m in _DEST_PREVIEW)
+    meta_refresh_detected = bool(
+        soup.find("meta", attrs={"http-equiv": re.compile(r"refresh", re.I)}) is not None
+    )
+    html_l = str(soup).lower()
+    js_redirect_detected = bool(
+        ("window.location" in html_l or "location.href" in html_l or "location.replace(" in html_l)
+        and ("settimeout(" in html_l or "setinterval(" in html_l or "document.location" in html_l)
+    )
 
     nav = soup.find("nav")
     footer = soup.find("footer")
@@ -406,9 +415,13 @@ def extract_html_dom_anomaly_signals(
         or destination_preview_phrase_present
     )
     forwarding_heavy = bool(truly_external_link_count >= 2 and total_links <= 8 and word_count < 180)
-    wrapper_page_pattern = bool(
-        iframe_count >= 1 and word_count < 90 and (explicit_interstitial_text or forwarding_heavy)
+    explicit_redirect_behavior = bool(meta_refresh_detected or js_redirect_detected)
+    interstitial_or_preview_pattern = bool(
+        interstitial_marker_text_present and (explicit_interstitial_text or explicit_redirect_behavior)
     ) or bool(explicit_interstitial_text and forwarding_heavy)
+    wrapper_page_pattern = bool(
+        iframe_count >= 1 and word_count < 90 and (explicit_interstitial_text or explicit_redirect_behavior or forwarding_heavy)
+    ) or bool(explicit_interstitial_text and (forwarding_heavy or explicit_redirect_behavior))
 
     forms = soup.find_all("form")
     inputs = soup.find_all("input")
@@ -802,6 +815,8 @@ def extract_html_dom_anomaly_signals(
         "redirect_countdown_phrase_present": redirect_countdown_phrase_present,
         "continue_to_destination_phrase_present": continue_to_destination_phrase_present,
         "destination_preview_phrase_present": destination_preview_phrase_present,
+        "meta_refresh_detected": meta_refresh_detected,
+        "js_redirect_detected": js_redirect_detected,
         "wrapper_page_pattern": wrapper_page_pattern,
         "login_harvester_pattern": login_harvester_pattern,
         "sparse_credential_capture_layout": sparse_credential_capture_layout,

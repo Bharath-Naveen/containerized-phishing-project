@@ -69,6 +69,16 @@ _BUILDER_PLATFORM_SUFFIXES = (
     "typedream.app",
     "carrd.co",
 )
+_CREATOR_PLATFORM_SUFFIXES = (
+    "podia.com",
+    "gumroad.com",
+    "shopify.com",
+    "myshopify.com",
+    "notion.site",
+    "webflow.io",
+    "squarespace.com",
+    "wixsite.com",
+)
 _URL_WEAK_KEYWORDS = ("login", "verify", "secure", "account", "update", "payment", "auth", "wallet")
 _SUSPICIOUS_HTML_KEYWORDS = ("verify", "password", "account", "security", "urgent", "suspend", "billing")
 _FASTTEXT_MIN_TEXT_CHARS = 120
@@ -77,7 +87,9 @@ _FASTTEXT_MODEL_ERROR: Optional[str] = None
 _TRUSTED_DOMAIN_REGISTRY_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE: Optional[List[Dict[str, Any]]] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH: Optional[str] = None
+_OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE: Optional[Dict[str, Any]] = None
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_OFFICIAL_DOMAINS_JSON_PATH = _REPO_ROOT / "data" / "official_domains.json"
 _IMPERSONATION_BRAND_TOKENS = set(BRAND_TOKENS) | {"handshake"}
 _SECURITY_BLOCK_VENDOR_PATTERNS: Dict[str, Tuple[str, ...]] = {
     "lionic": (
@@ -133,6 +145,65 @@ def _detect_security_block_page(capture_json: Optional[Dict[str, Any]]) -> Dict[
         "security_block_page_vendor": None,
         "security_block_page_reasons": [],
     }
+
+
+def _is_major_brand_token(token: str) -> bool:
+    t = (token or "").strip().lower()
+    return bool(t and t in _IMPERSONATION_BRAND_TOKENS)
+
+
+def _contains_major_brand_token(text: str) -> bool:
+    blob = f" {str(text or '').lower()} "
+    for tok in _IMPERSONATION_BRAND_TOKENS:
+        t = str(tok or "").strip().lower()
+        if len(t) < 3:
+            continue
+        if f" {t} " in blob or f"-{t}" in blob or f"{t}-" in blob or f"/{t}" in blob or f"{t}/" in blob or f".{t}" in blob:
+            return True
+    return False
+
+
+def _normalize_entity_token(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+def _creator_platform_host_candidate(
+    *,
+    final_host: str,
+    final_reg: str,
+    title: str,
+    visible_text: str,
+) -> Tuple[bool, str, List[str]]:
+    reasons: List[str] = []
+    if not final_host or not final_reg or final_reg not in _CREATOR_PLATFORM_SUFFIXES:
+        return False, "", reasons
+    if final_host == final_reg or not final_host.endswith("." + final_reg):
+        return False, "", reasons
+    sub = final_host[: -(len(final_reg) + 1)].strip().lower()
+    primary = sub.split(".")[0].strip()
+    if len(primary) < 3:
+        return False, "", reasons
+    if _is_major_brand_token(primary):
+        reasons.append("subdomain_matches_major_brand_token")
+        return False, primary, reasons
+    primary_norm = _normalize_entity_token(primary)
+    text_blob = f"{(title or '').lower()} {(visible_text or '').lower()}"
+    text_norm = _normalize_entity_token(text_blob)
+    if primary_norm and primary_norm in text_norm:
+        reasons.append("subdomain_brand_matches_page_content")
+        return True, primary, reasons
+    # Ecosystem consistency: allow creator brand to match linked/mentioned same-entity apex domains.
+    domain_mentions = set(re.findall(r"\b[a-z0-9-]+\.[a-z]{2,}\b", text_blob))
+    for dm in domain_mentions:
+        reg = _reg_domain(dm)
+        if not reg:
+            continue
+        reg_label = _normalize_entity_token(reg.split(".")[0])
+        if primary_norm and reg_label and (primary_norm in reg_label or reg_label in primary_norm):
+            reasons.append("subdomain_brand_matches_ecosystem_domain")
+            return True, primary, reasons
+    reasons.append("subdomain_brand_not_reflected_in_page_content")
+    return False, primary, reasons
 
 
 def _fasttext_language_enrichment(capture_json: Optional[Dict[str, Any]], soup: Any) -> Dict[str, Any]:
@@ -195,6 +266,104 @@ def _hostname(url_or_host: str) -> str:
     except Exception:
         return ""
     return raw.lower()
+
+
+def normalize_brand_text(text: str) -> str:
+    s = str(text or "").lower()
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def tokenize_domain_brand(registrable_domain: str) -> List[str]:
+    rd = str(registrable_domain or "").lower().strip()
+    if not rd:
+        return []
+    label_raw = rd.split(".", 1)[0]
+    label = re.sub(r"[^a-z0-9]", "", label_raw)
+    if not label:
+        return []
+    toks: List[str] = [label]
+    for part in re.split(r"[-_]+", label_raw):
+        p = normalize_brand_text(part).replace(" ", "")
+        if len(p) >= 3:
+            toks.append(p)
+    if "of" in label and len(label) >= 8:
+        for part in re.split(r"of+", label):
+            p = normalize_brand_text(part).replace(" ", "")
+            if len(p) >= 3:
+                toks.append(p)
+    for bt in BRAND_TOKENS:
+        t = normalize_brand_text(str(bt or "")).replace(" ", "")
+        if len(t) >= 4 and t in label:
+            toks.append(t)
+    seen: set[str] = set()
+    out: List[str] = []
+    for t in toks:
+        if t and t not in seen:
+            out.append(t)
+            seen.add(t)
+    return out
+
+
+def extract_primary_brand_candidates(title: str, h1: str, visible_text_sample: str) -> List[str]:
+    candidates: List[str] = []
+    for raw in (title, h1):
+        txt = str(raw or "").strip()
+        if not txt:
+            continue
+        for seg in re.split(r"[|\-:/]", txt):
+            n = normalize_brand_text(seg)
+            if n:
+                candidates.append(" ".join(n.split()[:8]))
+    vis = normalize_brand_text(str(visible_text_sample or ""))
+    if vis:
+        candidates.append(" ".join(vis.split()[:12]))
+    seen: set[str] = set()
+    out: List[str] = []
+    for c in candidates:
+        c = c.strip()
+        if c and c not in seen:
+            out.append(c)
+            seen.add(c)
+    return out[:8]
+
+
+def compute_brand_domain_coherence(
+    *,
+    registrable_domain: str,
+    title: str,
+    h1: str,
+    visible_text_sample: str,
+) -> Dict[str, Any]:
+    domain_tokens = tokenize_domain_brand(registrable_domain)
+    page_candidates = extract_primary_brand_candidates(title, h1, visible_text_sample)
+    title_n = normalize_brand_text(title)
+    h1_n = normalize_brand_text(h1)
+    vis_n = normalize_brand_text(visible_text_sample)
+    compact_blob = (title_n + " " + h1_n + " " + " ".join(page_candidates)).replace(" ", "")
+    score = 0.0
+    reasons: List[str] = []
+    joined = domain_tokens[0] if domain_tokens else ""
+    if len(joined) >= 5 and joined in compact_blob:
+        score += 0.65
+        reasons.append("joined_domain_token_found_in_title_or_header")
+    for tok in domain_tokens[1:] if len(domain_tokens) > 1 else []:
+        if len(tok) < 4:
+            continue
+        if re.search(rf"\b{re.escape(tok)}\b", title_n) or re.search(rf"\b{re.escape(tok)}\b", h1_n):
+            score += 0.18
+    if joined and len(joined) >= 5 and joined in vis_n.replace(" ", ""):
+        score += 0.15
+        reasons.append("joined_domain_token_found_in_visible_text")
+    match = bool(score >= 0.55)
+    reason = "strong_brand_domain_text_alignment" if match else (";".join(reasons) if reasons else "no_strong_alignment")
+    return {
+        "brand_domain_coherence_score": round(min(score, 1.0), 4),
+        "brand_domain_coherence_match": match,
+        "brand_domain_coherence_reason": reason,
+        "domain_brand_tokens": domain_tokens,
+        "page_brand_candidates": page_candidates,
+    }
 
 
 def _load_trusted_domain_registry(csv_path: str) -> Dict[str, Dict[str, Any]]:
@@ -275,6 +444,40 @@ def _load_platform_domain_registry(csv_path: str) -> List[Dict[str, Any]]:
     return rows
 
 
+def _load_official_domain_trust_prior_registry() -> Dict[str, Any]:
+    global _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE
+    if _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE is not None:
+        return _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE
+    out: Dict[str, Any] = {"root_domains": set(), "canonical_subdomains": {}}
+    p = _OFFICIAL_DOMAINS_JSON_PATH
+    if not p.is_file():
+        _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE = out
+        return out
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE = out
+        return out
+    root_domains = set()
+    for d in (payload.get("root_domains") or []):
+        ds = str(d or "").strip().lower()
+        if ds:
+            root_domains.add(ds)
+    canonical_subdomains: Dict[str, List[str]] = {}
+    raw_subs = payload.get("canonical_subdomains") or {}
+    if isinstance(raw_subs, dict):
+        for k, v in raw_subs.items():
+            kd = str(k or "").strip().lower()
+            if not kd:
+                continue
+            vals = [str(x or "").strip().lower() for x in (v or []) if str(x or "").strip()]
+            canonical_subdomains[kd] = vals
+    out["root_domains"] = root_domains
+    out["canonical_subdomains"] = canonical_subdomains
+    _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE = out
+    return out
+
+
 def _classify_platform_host_context(
     *,
     layer2_capture: Optional[Dict[str, Any]],
@@ -288,6 +491,8 @@ def _classify_platform_host_context(
     final_url = str(cap.get("final_url") or "")
     final_host = _hostname(final_url)
     final_reg = str(cap.get("final_registered_domain") or "").lower()
+    title_s = str(cap.get("title") or "")
+    visible_s = str(cap.get("visible_text_sample") or "")
     security_block_page_detected = bool(cap.get("security_block_page_detected"))
     path_l = (urlparse(final_url).path or "").lower() if final_url else ""
     text = f"{str(cap.get('title') or '').lower()}\n{str(cap.get('visible_text_sample') or '').lower()}"
@@ -325,11 +530,25 @@ def _classify_platform_host_context(
             matched_entry = row
             break
     if matched_entry is None:
+        creator_ok, creator_brand, creator_reasons = _creator_platform_host_candidate(
+            final_host=final_host,
+            final_reg=final_reg,
+            title=title_s,
+            visible_text=visible_s,
+        )
+        if creator_ok and str(hp.get("host_identity_class") or "") != "suspicious_host_pattern":
+            inactive_markers = ("404", "not found", "page not found", "site unavailable", "unavailable", "not published")
+            creator_inactive = any(m in f"{title_s.lower()}\n{visible_s.lower()}" for m in inactive_markers)
+            context_type = "creator_platform_404_or_inactive" if creator_inactive else "platform_hosted_legitimate_candidate"
+            platform_name = final_reg
+            reasons.extend([f"creator_platform:{r}" for r in creator_reasons])
+            reasons.append("Creator-platform host/path appears entity-consistent; treat as legitimacy candidate.")
         return {
             "platform_context_type": context_type,
             "platform_name": platform_name,
             "platform_context_reasons": reasons,
             "oauth_providers_detected": sorted(oauth_found),
+            "creator_platform_brand": creator_brand if creator_ok else None,
             "platform_context_blockers": blockers,
         }
 
@@ -380,6 +599,7 @@ def _classify_platform_host_context(
         "platform_context_reasons": reasons,
         "oauth_providers_detected": sorted(oauth_found),
         "oauth_provider_link_matches": enrich.get("oauth_provider_link_matches") or {},
+        "creator_platform_brand": None,
         "platform_context_blockers": blockers,
     }
 
@@ -498,7 +718,7 @@ def _enrich_capture_and_html_signals(
     hs = html_structure_summary or {}
     dom = html_dom_summary or {}
     brand_terms = [str(x).lower() for x in (hs.get("brand_terms_found_in_text") or [])]
-    brand_domain_mismatch = bool(brand_terms and final_reg and not any(b in final_reg for b in brand_terms))
+    brand_terms_present = bool(brand_terms)
     redirect_domain_mismatch = bool(
         len(set(chain_regs)) >= 2 and final_reg and any(r and r != final_reg for r in chain_regs)
     )
@@ -551,39 +771,164 @@ def _enrich_capture_and_html_signals(
         except Exception:
             html_capture_missing_reason = "html_parse_partial"
 
+    final_path = ""
+    try:
+        final_path = ((urlparse(final_url).path or "") + "?" + (urlparse(final_url).query or "")).lower()
+    except Exception:
+        final_path = ""
+    page_family = str(dom.get("page_family") or "").strip().lower()
+    form_count = int(hs.get("form_count") or 0)
+    email_inputs = int(hs.get("email_input_count") or 0)
+    phone_inputs = int(hs.get("phone_input_count") or 0)
+    credential_capture = password_input_count > 0 or (form_count > 0 and (email_inputs > 0 or phone_inputs > 0))
+    cross_domain_credential = bool(external_form_action_count > 0 and (password_input_count > 0 or form_count > 0))
+    auth_path = any(t in (final_path or path_q) for t in ("login", "signin", "auth", "verify", "account", "password", "recover"))
+    auth_payment_path = any(t in (final_path or path_q) for t in ("login", "signin", "auth", "verify", "password", "recover", "checkout", "payment", "billing", "pay"))
+    official_platform_candidate = bool(host_on_official_brand_apex(_hostname(final_url)) or str(dom.get("official_platform_context")) == "true")
+    host_path_brand_context = bool(brand_in_subdomain_or_path_but_not_registered_domain or auth_path)
+    creator_platform_candidate = bool(final_reg in _CREATOR_PLATFORM_SUFFIXES and _hostname(final_url).endswith("." + final_reg))
+    creator_404_or_newsletter = bool(
+        creator_platform_candidate
+        and any(x in f"{str(hs.get('title') or '').lower()}\n{str(hs.get('visible_text_snippet') or '').lower()}\n{final_path}" for x in ("404", "not found", "page not found", "newsletter", "/404"))
+    )
+    creator_major_brand_surface = bool(
+        _contains_major_brand_token(_hostname(final_url))
+        or _contains_major_brand_token(final_path)
+        or _contains_major_brand_token(str(hs.get("title") or ""))
+        or _contains_major_brand_token(str(hs.get("h1_text") or ""))
+    )
+    trust_surface_blob = (
+        str(hs.get("title") or "")
+        + " "
+        + str(hs.get("h1_text") or "")
+        + " "
+        + str(hs.get("visible_text_snippet") or "")
+    ).lower()
+    auth_terms_present = any(
+        t in trust_surface_blob
+        for t in ("login", "sign in", "signin", "verify", "account", "password", "recover", "checkout", "secure")
+    ) or bool(re.search(r"\b(payment|billing|pay|pricing)\b", trust_surface_blob))
+    brand_in_trust_surface_text = any(b in trust_surface_blob for b in brand_terms)
+    brand_auth_surface_context = bool(brand_in_trust_surface_text and auth_terms_present)
+    auth_payment_brand_context = bool(
+        # Credentials/forms alone are not sufficient; mismatched brand must be part of trust/auth context.
+        (
+            page_family in {"auth_login_recovery", "checkout_payment"}
+            or auth_payment_path
+            or credential_capture
+            or cross_domain_credential
+        )
+        and (brand_auth_surface_context or host_path_brand_context or bool(dom.get("trust_surface_brand_domain_mismatch")))
+    )
+    trust_surface_brand_context = bool(
+        dom.get("trust_surface_brand_domain_mismatch")
+        or dom.get("title_brand_domain_mismatch")
+        or dom.get("h1_brand_domain_mismatch")
+        or dom.get("strong_branding_without_official_domain")
+        or dom.get("logo_domain_mismatch")
+        or int(dom.get("anchor_strong_mismatch_count") or 0) > 0
+    )
+    content_rich_profile = bool(dom.get("content_rich_profile") or page_family in {"article_news", "content_feed_forum_aggregator", "public_docs_or_reference", "generic_landing"})
+    no_cred_capture = bool((password_input_count == 0) and (not cross_domain_credential) and int(dom.get("form_action_external_domain_count") or 0) == 0)
+    brand_in_domain_or_path_context = bool(
+        brand_terms_present
+        and final_reg
+        and any((b in _hostname(final_url) or b in final_path) and (b not in final_reg) for b in brand_terms)
+    )
+    form_action_targets = dom.get("form_action_targets_summary") or []
+    brand_in_form_action_context = False
+    if isinstance(form_action_targets, list):
+        for row in form_action_targets:
+            if not isinstance(row, dict):
+                continue
+            ad = str(row.get("action_domain") or "").lower()
+            if ad and any((b in ad) and (b not in final_reg) for b in brand_terms):
+                brand_in_form_action_context = True
+                break
+    brand_in_auth_payment_context = bool(brand_terms_present and (auth_payment_brand_context or brand_auth_surface_context))
+    brand_domain_mismatch = bool(
+        brand_terms_present
+        and (
+            brand_in_domain_or_path_context
+            or brand_in_form_action_context
+            or (credential_capture and (brand_in_domain_or_path_context or trust_surface_brand_context or brand_in_auth_payment_context))
+            or brand_in_auth_payment_context
+        )
+    )
+    suppression_same_domain_content_rich = bool(
+        input_reg
+        and final_reg
+        and input_reg == final_reg
+        and int(hs.get("password_input_count") or 0) == 0
+        and int(hs.get("email_input_count") or 0) == 0
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and bool(dom.get("content_rich_profile") or (int(hs.get("nav_link_count") or 0) >= 4 and int(hs.get("footer_link_count") or 0) >= 2))
+    )
+    if suppression_same_domain_content_rich and not brand_in_domain_or_path_context and not brand_in_form_action_context and not brand_in_auth_payment_context:
+        brand_domain_mismatch = False
+    creator_ok, creator_brand, creator_reasons = _creator_platform_host_candidate(
+        final_host=_hostname(final_url),
+        final_reg=final_reg,
+        title=str(hs.get("title") or ""),
+        visible_text=str(hs.get("visible_text_snippet") or ""),
+    )
+    resource_only_brand_context = bool(
+        int(dom.get("branded_resource_domains_non_official") or 0) > 0
+        and not trust_surface_brand_context
+        and not host_path_brand_context
+        and not auth_payment_brand_context
+    )
+    incidental_content_brand_context = bool(
+        content_rich_profile
+        and no_cred_capture
+        and bool(brand_terms)
+        and not trust_surface_brand_context
+        and not host_path_brand_context
+        and not auth_payment_brand_context
+    )
+
     def _classify_brand_domain_mismatch_strength() -> str:
         if not brand_domain_mismatch:
             return "none"
-        final_path = ""
-        try:
-            final_path = ((urlparse(final_url).path or "") + "?" + (urlparse(final_url).query or "")).lower()
-        except Exception:
-            final_path = ""
-        page_family = str(dom.get("page_family") or "").strip().lower()
-        auth_path = any(t in (final_path or path_q) for t in ("login", "signin", "auth", "verify", "account", "password", "recover"))
-        auth_context = page_family == "auth_login_recovery" or auth_path
-        form_count = int(hs.get("form_count") or 0)
-        email_inputs = int(hs.get("email_input_count") or 0)
-        phone_inputs = int(hs.get("phone_input_count") or 0)
-        credential_capture = password_input_count > 0 or (form_count > 0 and (email_inputs > 0 or phone_inputs > 0))
-        payment_brand = any(b in {"paypal", "stripe"} for b in brand_terms)
-        payment_flow = any(t in (final_path or path_q) for t in ("checkout", "payment", "billing", "pay")) or bool(
-            "checkout_payment" == page_family
-        )
-        payment_impersonation = bool(payment_brand and (payment_flow or form_count > 0))
-        cross_domain_credential = bool(external_form_action_count > 0 and (password_input_count > 0 or form_count > 0))
-        if auth_context or credential_capture or payment_impersonation or cross_domain_credential:
+        if (
+            creator_ok
+            and no_cred_capture
+            and not cross_domain_credential
+            and not creator_major_brand_surface
+            and not trust_surface_brand_context
+            and not auth_payment_brand_context
+        ):
+            # Creator-platform entity-consistent pages can include social/payment/platform ecosystem brand mentions.
+            return "weak"
+        if (
+            creator_404_or_newsletter
+            and no_cred_capture
+            and not cross_domain_credential
+            and not creator_major_brand_surface
+            and not trust_surface_brand_context
+            and not auth_payment_brand_context
+        ):
+            return "weak"
+        if official_platform_candidate and not trust_surface_brand_context and not auth_payment_brand_context:
+            # Official platform pages can mention many brands contextually (UTM, customer logos, OAuth labels, marketing copy).
+            return "weak"
+        if creator_ok and no_cred_capture and not trust_surface_brand_context and not host_path_brand_context:
+            return "weak"
+        if host_path_brand_context or trust_surface_brand_context or auth_payment_brand_context:
             return "strong"
-        contentish_path = any(t in (final_path or path_q) for t in ("pricing", "blog", "product", "features", "integrations", "docs"))
-        contextual_mentions = any(
-            t in ((str(hs.get("visible_text_snippet") or "") + " " + str(hs.get("title") or "")).lower())
-            for t in ("pay with", "supports", "integration", "integrations", "accepted payment", "payment methods")
-        )
-        if contentish_path or contextual_mentions:
+        if final_domain_is_free_hosting and bool(brand_in_subdomain_or_path_but_not_registered_domain):
+            return "strong"
+        if resource_only_brand_context or incidental_content_brand_context:
             return "weak"
         return "strong"
 
     brand_mismatch_strength = _classify_brand_domain_mismatch_strength()
+    coherence = compute_brand_domain_coherence(
+        registrable_domain=final_reg,
+        title=str(hs.get("title") or ""),
+        h1=str(hs.get("h1_text") or ""),
+        visible_text_sample=str(hs.get("visible_text_snippet") or ""),
+    )
     layer2 = {
         "input_registered_domain": input_reg,
         "final_registered_domain": final_reg,
@@ -591,6 +936,20 @@ def _enrich_capture_and_html_signals(
         "cross_domain_redirect_count": cross_domain_redirect_count,
         "brand_domain_mismatch": brand_domain_mismatch,
         "brand_domain_mismatch_strength": brand_mismatch_strength,
+        "host_path_brand_context": host_path_brand_context,
+        "trust_surface_brand_context": trust_surface_brand_context,
+        "auth_payment_brand_context": auth_payment_brand_context,
+        "resource_only_brand_context": resource_only_brand_context,
+        "incidental_content_brand_context": incidental_content_brand_context,
+        "brand_mismatch_suppressed_same_domain_content_rich": suppression_same_domain_content_rich,
+        "brand_domain_coherence_score": float(coherence.get("brand_domain_coherence_score") or 0.0),
+        "brand_domain_coherence_match": bool(coherence.get("brand_domain_coherence_match")),
+        "brand_domain_coherence_reason": str(coherence.get("brand_domain_coherence_reason") or ""),
+        "domain_brand_tokens": list(coherence.get("domain_brand_tokens") or []),
+        "page_brand_candidates": list(coherence.get("page_brand_candidates") or []),
+        "platform_hosted_brand_consistency_candidate": creator_ok,
+        "platform_hosted_brand_consistency_reasons": creator_reasons,
+        "platform_hosted_brand": creator_brand or None,
         "redirect_domain_mismatch": redirect_domain_mismatch,
         "final_domain_is_free_hosting": final_domain_is_free_hosting,
         "contains_punycode": contains_punycode,
@@ -603,6 +962,12 @@ def _enrich_capture_and_html_signals(
         "security_block_page_detected": bool(security_block.get("security_block_page_detected")),
         "security_block_page_vendor": security_block.get("security_block_page_vendor"),
         "security_block_page_reasons": list(security_block.get("security_block_page_reasons") or []),
+        "uses_https": bool(cj.get("uses_https")),
+        "browser_security_state": str(cj.get("browser_security_state") or "") or None,
+        "tls_or_cert_error_detected": bool(cj.get("tls_or_cert_error_detected")),
+        "insecure_scheme_detected": bool(cj.get("insecure_scheme_detected")),
+        "mixed_content_detected": bool(cj.get("mixed_content_detected")),
+        "security_state_reasons": list(cj.get("security_state_reasons") or []),
     }
     click_meta = ((cj.get("interaction") or {}) if isinstance(cj.get("interaction"), dict) else {})
     layer2["click_probe"] = {
@@ -1305,6 +1670,37 @@ def _compute_phishing_blockers(
         mismatch_strength == "strong"
         and (bool(cap.get("brand_domain_mismatch")) or bool(dom.get("trust_surface_brand_domain_mismatch")))
     )
+    same_reg_domain = bool(
+        str(cap.get("input_registered_domain") or "")
+        and str(cap.get("input_registered_domain") or "") == str(cap.get("final_registered_domain") or "")
+    )
+    weak_or_no_brand_mismatch = mismatch_strength in {"none", "weak"} or not bool(cap.get("brand_domain_mismatch"))
+    brand_domain_coherence_match = bool(cap.get("brand_domain_coherence_match"))
+    coherent_brand_host_identity_candidate = bool(
+        brand_domain_coherence_match
+        and same_reg_domain
+        and weak_or_no_brand_mismatch
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and platform_context_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+    )
+    rich_nav_footer_support = bool(
+        int(cap.get("nav_link_count") or 0) >= 4
+        and int(cap.get("footer_link_count") or 0) >= 2
+        and bool(cap.get("has_support_help_links"))
+    )
+    clean_official_content_wrapper_context = bool(
+        same_reg_domain
+        and weak_or_no_brand_mismatch
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and int(cap.get("password_input_count") or 0) == 0
+        and not bool(cap.get("password_input_external_action"))
+        and not bool(cap.get("network_exfiltration_suspected"))
+        and not bool(cap.get("security_block_page_detected"))
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and platform_context_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and not bool(dom.get("suspicious_credential_collection_pattern") or dom.get("login_harvester_pattern"))
+        and (rich_nav_footer_support or bool(dom.get("content_rich_profile")) or coherent_brand_host_identity_candidate)
+    )
     blockers: List[str] = []
     if int(dom.get("form_action_external_domain_count") or 0) > 0 or bool(legitimacy_bundle.get("suspicious_form_action_cross_origin")):
         blockers.append("cross_domain_form_action")
@@ -1320,7 +1716,7 @@ def _compute_phishing_blockers(
         blockers.append("cloud_hosted_brand_impersonation")
     if bool(dom.get("suspicious_credential_collection_pattern")) or bool(dom.get("login_harvester_pattern")):
         blockers.append("sparse_credential_harvester_pattern")
-    if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
+    if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")) and not clean_official_content_wrapper_context:
         blockers.append("wrapper_or_interstitial_redirect_pattern")
     if int(dom.get("anchor_strong_mismatch_count") or 0) > 0:
         blockers.append("strong_anchor_domain_mismatch")
@@ -1954,7 +2350,72 @@ def _apply_evidence_adjudication_layer(
     security_block_page_detected = bool(cap.get("security_block_page_detected"))
     host_identity = str(hp.get("host_identity_class") or "")
     host_legit_conf = str(hp.get("host_legitimacy_confidence") or "")
+    no_phishing_guard = bool(out.get("no_phishing_evidence_guard"))
     capture_failed = bool(cap.get("capture_failed"))
+    pctx_type = str(pctx.get("platform_context_type") or "")
+    platform_hosted_candidate = pctx_type in {"platform_hosted_legitimate_candidate", "creator_platform_404_or_inactive"}
+    title_l = str(cap.get("title") or "").lower()
+    vis_l = str(cap.get("visible_text_sample") or "").lower()
+    platform_404_or_inactive = bool(
+        platform_hosted_candidate
+        and any(x in f"{title_l}\n{vis_l}" for x in ("404", "not found", "page not found", "site unavailable", "unavailable", "not published"))
+    )
+    path_l = (urlparse(final_url).path or "").lower() if final_url else ""
+    major_brand_impersonation_surface = bool(
+        _contains_major_brand_token(final_host)
+        or _contains_major_brand_token(path_l)
+        or _contains_major_brand_token(title_l)
+    )
+    no_password_capture = int(hs.get("password_input_count") or 0) == 0
+    same_domain_or_platform_forms = int(dom.get("form_action_external_domain_count") or 0) == 0
+    no_suspicious_behavior = bool(
+        not beh.get("network_exfiltration_suspected")
+        and not beh.get("js_dynamic_form_injection_detected")
+        and not beh.get("js_anti_debugging_detected")
+        and not (beh.get("js_suspicious_fetch_domains") or beh.get("js_suspicious_redirect_domains"))
+        and float(beh.get("js_obfuscation_score") or 0.0) < 0.35
+    )
+    uses_https = bool(cap.get("uses_https"))
+    tls_or_cert_error_detected = bool(cap.get("tls_or_cert_error_detected"))
+    insecure_scheme_detected = bool(cap.get("insecure_scheme_detected"))
+    safe_platform_404_candidate = bool(
+        platform_404_or_inactive
+        and same_domain_or_platform_forms
+        and no_password_capture
+        and no_suspicious_behavior
+        and not major_brand_impersonation_surface
+        and not security_block_page_detected
+    )
+    creator_platform_uncertainty_cap = bool(
+        pctx_type == "platform_hosted_legitimate_candidate"
+        and same_domain_or_platform_forms
+        and no_password_capture
+        and no_suspicious_behavior
+        and not major_brand_impersonation_surface
+        and not security_block_page_detected
+    )
+    input_reg = str(cap.get("input_registered_domain") or "")
+    same_registrable_domain = bool(input_reg and final_reg and input_reg == final_reg)
+    brand_domain_coherence_match = bool(cap.get("brand_domain_coherence_match"))
+    weak_or_no_brand_mismatch = str(cap.get("brand_domain_mismatch_strength") or "none").lower() in {"none", "weak"} or not bool(cap.get("brand_domain_mismatch"))
+    coherence_clean_context = bool(
+        brand_domain_coherence_match
+        and same_registrable_domain
+        and weak_or_no_brand_mismatch
+        and int(hs.get("password_input_count") or 0) == 0
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and not bool(cap.get("password_input_external_action"))
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+    )
+    auth_path_like = any(t in path_l for t in ("login", "signin", "sign-in", "auth", "account", "session", "sessions"))
+    first_party_login_like = bool(
+        str(dom.get("page_family") or "") == "auth_login_recovery"
+        or auth_path_like
+        or int(hs.get("password_input_count") or 0) > 0
+    )
     html_missing_reason = str(enrich.get("html_capture_missing_reason") or "").strip().lower()
     html_dom_unavailable = bool(
         capture_failed
@@ -1963,6 +2424,34 @@ def _apply_evidence_adjudication_layer(
         or (html_dom_risk is None)
         or not bool(hs)
         or not bool(dom)
+    )
+    first_party_auth_flow_cap = bool(
+        first_party_login_like
+        and same_registrable_domain
+        and (not capture_failed)
+        and (not html_dom_unavailable)
+        and same_domain_or_platform_forms
+        and not bool(dom.get("suspicious_credential_collection_pattern") or dom.get("login_harvester_pattern"))
+        and not bool(cap.get("brand_domain_mismatch"))
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and no_suspicious_behavior
+        and not security_block_page_detected
+    )
+    official_domain_prior_registry = _load_official_domain_trust_prior_registry()
+    official_root_domains = set(official_domain_prior_registry.get("root_domains") or set())
+    official_domain_prior_candidate = bool(
+        final_reg
+        and final_reg in official_root_domains
+        and same_registrable_domain
+        and not bool(cap.get("brand_domain_mismatch"))
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and not security_block_page_detected
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and no_suspicious_behavior
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and not bool(cap.get("final_domain_is_free_hosting"))
     )
 
     try:
@@ -1989,6 +2478,34 @@ def _apply_evidence_adjudication_layer(
     no_brand_mismatch = not bool(cap.get("brand_domain_mismatch"))
     same_domain_forms = int(dom.get("form_action_external_domain_count") or 0) == 0
     ml_not_high_or_strong_legit = cons == "strong_legitimate" or p < 0.70
+    weak_or_no_brand_mismatch = str(cap.get("brand_domain_mismatch_strength") or "none").lower() in {"none", "weak"} or no_brand_mismatch
+    no_credential_capture = bool(int(hs.get("password_input_count") or 0) == 0 and int(hs.get("email_input_count") or 0) == 0)
+    no_password_external_action = not bool(cap.get("password_input_external_action"))
+    brand_domain_coherence_match = bool(cap.get("brand_domain_coherence_match"))
+    coherent_brand_host_identity_candidate = bool(
+        brand_domain_coherence_match
+        and same_reg_domain
+        and weak_or_no_brand_mismatch
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+    )
+    rich_nav_footer_support = bool(
+        int(hs.get("nav_link_count") or 0) >= 4
+        and int(hs.get("footer_link_count") or 0) >= 2
+        and bool(hs.get("has_support_help_links"))
+    )
+    wrapper_clean_official_or_same_domain_safe = bool(
+        same_reg_domain
+        and no_credential_capture
+        and same_domain_forms
+        and no_password_external_action
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and weak_or_no_brand_mismatch
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and (rich_nav_footer_support or official_domain_prior_candidate or coherent_brand_host_identity_candidate)
+    )
     wrapper_official_authwall_safe = bool(
         official_like_host
         and same_reg_domain
@@ -1998,7 +2515,7 @@ def _apply_evidence_adjudication_layer(
         and host_legit_conf == "high"
     )
     if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
-        if wrapper_official_authwall_safe:
+        if wrapper_official_authwall_safe or wrapper_clean_official_or_same_domain_safe:
             # Official first-party authwall/login wrappers are ambiguity context, not hard blockers.
             pass
         else:
@@ -2042,6 +2559,10 @@ def _apply_evidence_adjudication_layer(
         amb_signals.append("high_model_probability_spread")
     if wrapper_official_authwall_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
         amb_signals.append("official_authwall_wrapper_pattern")
+    if wrapper_clean_official_or_same_domain_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
+        amb_signals.append("official_content_wrapper_pattern")
+        if coherent_brand_host_identity_candidate:
+            amb_signals.append("coherent_brand_wrapper_pattern")
     if bool(beh.get("js_dynamic_form_injection_detected")):
         phish_score += 0.20
         phish_signals.append("js_dynamic_form_injection_detected")
@@ -2066,11 +2587,30 @@ def _apply_evidence_adjudication_layer(
         phish_signals.append("js_unrelated_network_calls_with_auth_context")
     elif bool(beh.get("network_unrelated_domains")):
         amb_signals.append("unrelated_third_party_network_domains")
-        if len(beh.get("network_unrelated_domains") or []) >= 5:
+        if len(beh.get("network_unrelated_domains") or []) >= 5 and pctx_type not in {
+            "official_platform_domain",
+            "official_platform_login",
+            "platform_hosted_legitimate_candidate",
+            "creator_platform_404_or_inactive",
+        }:
             phish_score += 0.08
             phish_signals.append("many_unrelated_third_party_domains")
     if bool(beh.get("behavior_analysis_unavailable")):
         amb_signals.append("behavior_analysis_unavailable")
+    if (
+        (tls_or_cert_error_detected or insecure_scheme_detected)
+        and (
+            int(hs.get("password_input_count") or 0) > 0
+            or str(dom.get("page_family") or "") in {"auth_login_recovery", "checkout_payment"}
+            or any(t in (urlparse(final_url).path or "").lower() for t in ("login", "signin", "auth", "verify", "checkout", "payment"))
+        )
+    ):
+        phish_score += 0.18
+        phish_signals.append("insecure_auth_surface")
+    if first_party_auth_flow_cap and (p >= 0.70 or cons in {"strong_phishing", "boosted_only"}):
+        amb_signals.append("first_party_login_ml_disagreement")
+    if platform_404_or_inactive:
+        amb_signals.append("platform_404_or_inactive")
     if security_block_page_detected:
         amb_signals.append("security_block_page_observed")
         phish_score += 0.18
@@ -2082,9 +2622,55 @@ def _apply_evidence_adjudication_layer(
         if str(pctx.get("platform_context_type") or "") == "user_hosted_subdomain":
             phish_score += 0.30
             phish_signals.append("suspicious_user_hosted_subdomain")
-    if _is_strong_brand_domain_mismatch(cap, dom):
+    strong_brand_mismatch = _is_strong_brand_domain_mismatch(cap, dom)
+    if strong_brand_mismatch and pctx_type in {"official_platform_domain", "official_platform_login"}:
+        # On official platform domains, only trust/auth/host-path impersonation should remain strong.
+        trust_or_host_impersonation = bool(
+            cap.get("trust_surface_brand_context")
+            or cap.get("host_path_brand_context")
+            or cap.get("auth_payment_brand_context")
+            or _contains_major_brand_token(final_host)
+            or _contains_major_brand_token((urlparse(final_url).path or "").lower() if final_url else "")
+            or _contains_major_brand_token(str(cap.get("title") or ""))
+            or _contains_major_brand_token(str(hs.get("h1_text") or ""))
+        )
+        if not trust_or_host_impersonation:
+            strong_brand_mismatch = False
+    deceptive_url_structure = bool(
+        cap.get("host_path_brand_context")
+        or cap.get("brand_in_subdomain_or_path_but_not_registered_domain")
+        or (host_identity == "suspicious_host_pattern")
+        or bool(cap.get("final_domain_is_free_hosting"))
+    )
+    credential_harvest_context = bool(
+        int(hs.get("password_input_count") or 0) > 0
+        or bool(dom.get("suspicious_credential_collection_pattern"))
+        or bool(dom.get("login_harvester_pattern"))
+        or int(dom.get("form_action_external_domain_count") or 0) > 0
+    )
+    if strong_brand_mismatch and (credential_harvest_context or deceptive_url_structure):
         phish_score += 0.30
         phish_signals.append("strong_brand_domain_mismatch")
+    if strong_brand_mismatch and pctx_type in {"platform_hosted_legitimate_candidate", "creator_platform_404_or_inactive"}:
+        creator_safe_context = bool(
+            int(hs.get("password_input_count") or 0) == 0
+            and int(dom.get("form_action_external_domain_count") or 0) == 0
+            and not bool(beh.get("network_exfiltration_suspected"))
+            and not _contains_major_brand_token(final_host)
+            and not _contains_major_brand_token((urlparse(final_url).path or "").lower() if final_url else "")
+            and not _contains_major_brand_token(str(cap.get("title") or ""))
+            and not _contains_major_brand_token(str(hs.get("h1_text") or ""))
+        )
+        creator_404_or_newsletter = bool(
+            any(x in f"{str(cap.get('title') or '').lower()}\n{str(cap.get('visible_text_sample') or '').lower()}\n{(urlparse(final_url).path or '').lower() if final_url else ''}" for x in ("404", "not found", "page not found", "newsletter", "/404"))
+        )
+        if creator_safe_context and creator_404_or_newsletter:
+            # Demote over-aggressive mismatch on benign creator platform 404/newsletter context.
+            phish_score = max(0.0, phish_score - 0.30)
+            try:
+                phish_signals.remove("strong_brand_domain_mismatch")
+            except ValueError:
+                pass
     if bool(out.get("dormant_phishing_infra_detected")):
         phish_score += 0.40
         phish_signals.append("dormant_phishing_infrastructure")
@@ -2127,9 +2713,27 @@ def _apply_evidence_adjudication_layer(
         cap.get("final_registered_domain") or ""
     ):
         amb_signals.append("same_domain_on_suspicious_registrable")
-    if str(pctx.get("platform_context_type") or "") in {"official_platform_domain", "official_platform_login"}:
+    if pctx_type in {"official_platform_domain", "official_platform_login"}:
         legit_score += 0.30
         legit_signals.append("official_platform_domain")
+    if platform_hosted_candidate and str(cap.get("brand_domain_mismatch_strength") or "none") in {"none", "weak"}:
+        legit_score += 0.20
+        legit_signals.append("platform_hosted_brand_consistency")
+    if first_party_auth_flow_cap:
+        legit_score += 0.18
+        legit_signals.append("first_party_auth_flow_consistency")
+    if coherence_clean_context:
+        legit_score += 0.18
+        legit_signals.append("brand_domain_coherence")
+        if not official_domain_prior_candidate:
+            legit_score += 0.10
+            legit_signals.append("coherent_brand_host_identity")
+    if uses_https and not tls_or_cert_error_detected and not insecure_scheme_detected:
+        legit_score += 0.05
+        legit_signals.append("valid_https_transport")
+    if official_domain_prior_candidate:
+        legit_score += 0.14
+        legit_signals.append("official_domain_trust_prior")
     hts = str(trust.get("hosting_trust_status") or "")
     if hts == "hosting_trust_verified":
         legit_score += 0.35
@@ -2186,6 +2790,38 @@ def _apply_evidence_adjudication_layer(
         and "strong_brand_domain_mismatch" in phish_signals
         and "ml_consensus_strong_phishing" in phish_signals
     )
+    trusted_official_context = bool(
+        pctx_type in {"official_platform_domain", "official_platform_login"}
+        or host_on_official_brand_apex(final_host)
+        or (
+            str(trust.get("hosting_trust_status") or "") in {"hosting_trust_verified", "hosting_trust_partial"}
+            and host_legit_conf == "high"
+            and host_identity != "suspicious_host_pattern"
+        )
+    )
+    creator_legitimate_context = bool(
+        pctx_type in {"platform_hosted_legitimate_candidate", "creator_platform_404_or_inactive"}
+    )
+    missing_evidence_high_risk = bool(
+        (capture_failed or html_dom_unavailable)
+        and (
+            bool(beh.get("behavior_analysis_unavailable"))
+            or html_missing_reason in {"html_not_available", "html_parse_partial"}
+        )
+        and (p >= 0.90 or cons == "strong_phishing")
+        and (
+            pctx_type == "user_hosted_subdomain"
+            or host_legit_conf == "low"
+            or host_identity == "suspicious_host_pattern"
+            or bool(cap.get("capture_failure_suspicious"))
+        )
+        and (not trusted_official_context)
+        and (not creator_legitimate_context)
+        and (not security_block_page_detected)
+    )
+    if missing_evidence_high_risk:
+        phish_score += 0.20
+        phish_signals.append("high_risk_missing_evidence")
     security_block_escalation = bool(
         security_block_page_detected
         and (
@@ -2194,9 +2830,75 @@ def _apply_evidence_adjudication_layer(
             or "strong_brand_domain_mismatch" in phish_signals
         )
     )
+    official_domain_conflict_relief = bool(
+        official_domain_prior_candidate
+        and (not hard_blockers)
+        and (not security_block_page_detected)
+        and phish_score >= 0.70
+        and legit_score >= 0.35
+    )
+    official_domain_ml_overconfidence = bool(
+        official_domain_prior_candidate
+        and (not capture_failed)
+        and (not html_dom_unavailable)
+        and same_domain_or_platform_forms
+        and not bool(cap.get("brand_domain_mismatch"))
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and (not hard_blockers)
+        and (
+            bool(dom.get("content_rich_profile"))
+            or str(dom.get("page_family") or "") in {"article_news", "content_feed_forum_aggregator", "public_docs_or_reference", "generic_landing"}
+        )
+        and (float(html_dom_risk) if isinstance(html_dom_risk, (int, float)) else 1.0) <= 0.20
+        and (float(html_structure_risk) if isinstance(html_structure_risk, (int, float)) else 1.0) <= 0.30
+        and (p >= 0.90 or cons == "strong_phishing")
+    )
+    ml_brand_coherence_disagreement = bool(
+        coherence_clean_context
+        and (not hard_blockers)
+        and (
+            bool(dom.get("content_rich_profile"))
+            or str(dom.get("page_family") or "") in {"article_news", "content_feed_forum_aggregator", "public_docs_or_reference", "generic_landing"}
+        )
+        and (float(html_dom_risk) if isinstance(html_dom_risk, (int, float)) else 1.0) <= 0.20
+        and (float(html_structure_risk) if isinstance(html_structure_risk, (int, float)) else 1.0) <= 0.30
+        and (p >= 0.90 or cons == "strong_phishing")
+    )
+    if official_domain_ml_overconfidence:
+        amb_signals.append("official_domain_ml_overconfidence_suspected")
+    if ml_brand_coherence_disagreement:
+        amb_signals.append("ml_brand_coherence_disagreement")
+    auth_page_like = str(dom.get("page_family") or "") == "auth_login_recovery" or first_party_login_like
+    official_domain_clean_promotion = bool(
+        official_domain_prior_candidate
+        and (cons == "strong_legitimate" or p < 0.50 or no_phishing_guard)
+        and legit_score >= 0.60
+        and phish_score < 0.70
+        and not auth_page_like
+    )
 
-    if hard_blockers:
+    if no_phishing_guard and not hard_blockers:
+        # Deterministic precedence: no-phishing-evidence guard cannot end as phishing without hard blockers.
+        final_label = "likely_legitimate" if legit_score >= 0.45 and phish_score < 0.70 else "uncertain"
+    elif hard_blockers:
         final_label = "likely_phishing"
+    elif missing_evidence_high_risk:
+        final_label = "likely_phishing"
+        reasons.append("Missing live/HTML/DOM evidence with high ML and suspicious host context elevates risk.")
+    elif first_party_auth_flow_cap:
+        # First-party auth flow on same registrable domain with no exfiltration/impersonation: keep high-ML disagreement conservative.
+        final_label = "uncertain"
+    elif ml_brand_coherence_disagreement:
+        # Strong title/header-brand to host coherence with clean live evidence should cap high-ML disagreement.
+        final_label = "uncertain"
+    elif official_domain_ml_overconfidence:
+        final_label = "uncertain"
+    elif official_domain_conflict_relief:
+        final_label = "uncertain"
+    elif creator_platform_uncertainty_cap:
+        # Cap creator-platform candidate pages at uncertain when no credential/exfiltration/impersonation hard evidence exists.
+        final_label = "uncertain"
     elif security_block_escalation:
         final_label = "likely_phishing"
     elif freehost_mismatch_consensus_escalation:
@@ -2222,10 +2924,15 @@ def _apply_evidence_adjudication_layer(
         and phish_score >= 0.60
     ):
         final_label = "likely_phishing"
+    elif safe_platform_404_candidate and not hard_blockers and "strong_brand_domain_mismatch" not in phish_signals:
+        # Known creator-platform inactive pages should not be convicted by ML/model-agreement alone.
+        final_label = "uncertain"
     elif phish_score >= 0.70 and evidence_conf >= 2:
         final_label = "likely_phishing"
     elif bool(out.get("inactive_site_detected")):
         final_label = "uncertain"
+    elif official_domain_clean_promotion:
+        final_label = "likely_legitimate"
     elif legit_score >= 0.70 and phish_score < 0.45:
         final_label = "likely_legitimate"
     else:
@@ -2369,7 +3076,14 @@ def build_dashboard_analysis(
                     "cross_domain_redirect_count": cap.cross_domain_redirect_count,
                     "settled_successfully": cap.settled_successfully,
                     "html_path": cap.html_path,
-                "visible_text_sample": (cap.visible_text or "")[:1200],
+                    "network_request_urls": list(cap.network_request_urls or []),
+                    "uses_https": bool(cap.uses_https),
+                    "browser_security_state": cap.browser_security_state,
+                    "tls_or_cert_error_detected": bool(cap.tls_or_cert_error_detected),
+                    "insecure_scheme_detected": bool(cap.insecure_scheme_detected),
+                    "mixed_content_detected": bool(cap.mixed_content_detected),
+                    "security_state_reasons": list(cap.security_state_reasons or []),
+                    "visible_text_sample": (cap.visible_text or "")[:1200],
                 },
                 "org_style": org,
             }

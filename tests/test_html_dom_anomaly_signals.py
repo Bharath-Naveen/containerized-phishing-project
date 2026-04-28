@@ -58,6 +58,55 @@ def test_dom_anomaly_interstitial_phrases(tmp_path: Path) -> None:
     assert s["continue_to_destination_phrase_present"] is True
 
 
+def test_content_rich_homepage_with_brand_mentions_not_wrapper(tmp_path: Path) -> None:
+    html = """
+    <html><head><title>Coursera</title></head>
+    <body>
+      <nav><a href="/browse">Browse</a><a href="/degrees">Degrees</a><a href="/careers">Careers</a><a href="/about">About</a></nav>
+      <h1>Learn from top institutions and companies</h1>
+      <p>Courses from Google, Microsoft, IBM and many other partners.</p>
+      <section><a href="/course/ml">Machine Learning</a><a href="/course/sql">SQL</a><a href="/course/python">Python</a></section>
+      <footer><a href="/help">Help</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
+    </body></html>
+    """
+    p = tmp_path / "coursera_like.html"
+    p.write_text(html, encoding="utf-8")
+    out = extract_html_dom_anomaly_signals(
+        html_path=str(p),
+        final_url="https://www.coursera.org/",
+        input_url="https://www.coursera.org/",
+    )
+    s = out["html_dom_anomaly_summary"]
+    assert s is not None
+    assert s["interstitial_or_preview_pattern"] is False
+    assert s["wrapper_page_pattern"] is False
+
+
+def test_wrapper_requires_explicit_redirect_behavior(tmp_path: Path) -> None:
+    html = """
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="2;url=https://external.example/destination" />
+        <title>Continue</title>
+      </head>
+      <body>
+        <p>You will be redirected in a few seconds. Continue to your destination.</p>
+      </body>
+    </html>
+    """
+    p = tmp_path / "redirect_wrapper.html"
+    p.write_text(html, encoding="utf-8")
+    out = extract_html_dom_anomaly_signals(
+        html_path=str(p),
+        final_url="https://gate.example/",
+        input_url="https://gate.example/",
+    )
+    s = out["html_dom_anomaly_summary"]
+    assert s is not None
+    assert s["meta_refresh_detected"] is True
+    assert s["interstitial_or_preview_pattern"] is True
+
+
 def test_same_ecosystem_links_not_counted_as_suspicious_external(tmp_path: Path) -> None:
     html = """
     <html><head><title>Medium home</title></head>

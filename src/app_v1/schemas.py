@@ -76,6 +76,13 @@ class CaptureResult:
     first_failed_capture_step: Optional[str] = None
     # Captured network request URLs from Playwright session (best-effort, truncated).
     network_request_urls: List[str] = field(default_factory=list)
+    # Browser/security-state telemetry (best-effort, never treated as standalone proof of legitimacy).
+    uses_https: bool = False
+    browser_security_state: Optional[str] = None
+    tls_or_cert_error_detected: bool = False
+    insecure_scheme_detected: bool = False
+    mixed_content_detected: bool = False
+    security_state_reasons: List[str] = field(default_factory=list)
 
     def as_json(self) -> Dict[str, Any]:
         # asdict recurses into nested dataclasses (e.g. interaction).

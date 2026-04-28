@@ -590,6 +590,7 @@ def _playwright_full_capture(
 
     def _fail_result_from_nav(nav_exc: BaseException) -> CaptureResult:
         _note_first_failure(first_fail, STEP_PAGE_GOTO)
+        nav_msg = str(nav_exc).lower()
         return CaptureResult(
             original_url=url,
             final_url=url,
@@ -607,6 +608,10 @@ def _playwright_full_capture(
             capture_block_reason=None,
             capture_block_evidence=None,
             first_failed_capture_step=STEP_PAGE_GOTO,
+            uses_https=str(url).lower().startswith("https://"),
+            tls_or_cert_error_detected=any(x in nav_msg for x in ("cert", "certificate", "ssl", "tls")),
+            insecure_scheme_detected=not str(url).lower().startswith("https://"),
+            security_state_reasons=["navigation_failed_before_security_state_capture"],
         )
 
     try:
@@ -647,6 +652,11 @@ def _playwright_full_capture(
                         seen_nav: set[str] = set()
                         network_requests: List[str] = []
                         seen_requests: set[str] = set()
+                        security_state_reasons: List[str] = []
+                        mixed_content_detected = False
+                        tls_or_cert_error_detected = False
+                        browser_security_state: Optional[str] = None
+                        uses_https = False
 
                         def _track_nav(frame: Any) -> None:
                             try:
@@ -673,19 +683,66 @@ def _playwright_full_capture(
                             if len(network_requests) < 400:
                                 network_requests.append(u)
                         page.on("request", _track_request)
+                        def _track_request_failed(req: Any) -> None:
+                            nonlocal tls_or_cert_error_detected
+                            nonlocal mixed_content_detected
+                            try:
+                                failure = req.failure or {}
+                                err_text = str((failure.get("errorText") if isinstance(failure, dict) else failure) or "").lower()
+                            except Exception:
+                                err_text = ""
+                            if not err_text:
+                                return
+                            if any(x in err_text for x in ("cert", "certificate", "ssl", "tls", "net::err_cert", "authority invalid")):
+                                tls_or_cert_error_detected = True
+                                if "request_failed_cert_or_tls" not in security_state_reasons:
+                                    security_state_reasons.append("request_failed_cert_or_tls")
+                            if "mixed-content" in err_text or "mixed content" in err_text:
+                                mixed_content_detected = True
+                                if "request_failed_mixed_content" not in security_state_reasons:
+                                    security_state_reasons.append("request_failed_mixed_content")
+                        page.on("requestfailed", _track_request_failed)
+                        def _track_console(msg: Any) -> None:
+                            nonlocal mixed_content_detected
+                            try:
+                                txt = str(msg.text or "").lower()
+                            except Exception:
+                                txt = ""
+                            if "mixed content" in txt or "mixed-content" in txt:
+                                mixed_content_detected = True
+                                if "console_mixed_content_warning" not in security_state_reasons:
+                                    security_state_reasons.append("console_mixed_content_warning")
+                        page.on("console", _track_console)
                         if stealth:
                             page.add_init_script(_STEALTH_INIT_SCRIPT)
 
                     with _capture_step(logger, STEP_PAGE_GOTO, last_step):
                         try:
-                            page.goto(
+                            nav_resp = page.goto(
                                 url,
                                 wait_until=cfg.wait_until,
                                 timeout=cfg.navigation_timeout_ms,
                             )
+                            try:
+                                final_probe_url = str((nav_resp.url if nav_resp is not None else page.url) or "")
+                            except Exception:
+                                final_probe_url = str(page.url or "")
+                            uses_https = final_probe_url.lower().startswith("https://")
+                            if nav_resp is not None:
+                                try:
+                                    sec_details = nav_resp.security_details()
+                                    if isinstance(sec_details, dict) and sec_details:
+                                        browser_security_state = "secure" if uses_https else "insecure"
+                                        if "response_security_details_present" not in security_state_reasons:
+                                            security_state_reasons.append("response_security_details_present")
+                                except Exception:
+                                    pass
                         except Exception as nav_exc:
                             if _is_blocked_navigation(nav_exc):
                                 code, evidence = _playwright_block_reason(nav_exc)
+                                if code == "http_tls_access_denied" or "cert" in str(nav_exc).lower() or "ssl" in str(nav_exc).lower():
+                                    tls_or_cert_error_detected = True
+                                    security_state_reasons.append("navigation_tls_or_cert_error")
                                 logger.warning(
                                     "capture: navigation classified as capture_blocked_by_target code=%s (%s)",
                                     code,
@@ -725,6 +782,9 @@ def _playwright_full_capture(
                         nav_chain.append(final_url)
                     if not nav_chain:
                         nav_chain = [url, final_url] if final_url and final_url != url else [url]
+                    uses_https = str(final_url or "").lower().startswith("https://")
+                    if browser_security_state is None:
+                        browser_security_state = "secure" if (uses_https and not tls_or_cert_error_detected) else "insecure"
                     redirect_count = max(0, len(nav_chain) - 1)
                     cross_domain_redirect_count = 0
                     for i in range(1, len(nav_chain)):
@@ -879,7 +939,13 @@ def _playwright_full_capture(
                         capture_block_reason=None,
                         capture_block_evidence=None,
                         first_failed_capture_step=first_fail[0],
-                            network_request_urls=network_requests,
+                        network_request_urls=network_requests,
+                        uses_https=uses_https,
+                        browser_security_state=browser_security_state,
+                        tls_or_cert_error_detected=bool(tls_or_cert_error_detected),
+                        insecure_scheme_detected=not uses_https,
+                        mixed_content_detected=bool(mixed_content_detected),
+                        security_state_reasons=list(dict.fromkeys(security_state_reasons)),
                     )
                 finally:
                     if context is not None:
@@ -908,6 +974,9 @@ def _playwright_full_capture(
             capture_block_reason=None,
             capture_block_evidence=None,
             first_failed_capture_step=last_step[0],
+            uses_https=str(url).lower().startswith("https://"),
+            insecure_scheme_detected=not str(url).lower().startswith("https://"),
+            security_state_reasons=["playwright_not_implemented"],
         )
 
 
@@ -977,6 +1046,8 @@ def capture_url(
             capture_block_evidence=None,
             first_failed_capture_step=None,
             network_request_urls=[],
+            uses_https=str(url).lower().startswith("https://"),
+            insecure_scheme_detected=not str(url).lower().startswith("https://"),
         )
 
     # Strategy A — stealth (headed, randomized UA, automation flags reduced).
@@ -1066,6 +1137,9 @@ def capture_url(
             ),
             first_failed_capture_step=None,
             network_request_urls=[],
+            uses_https=str(final_url or url).lower().startswith("https://"),
+            insecure_scheme_detected=not str(final_url or url).lower().startswith("https://"),
+            security_state_reasons=["http_fallback_no_browser_security_state"],
         )
     except Exception as httpe:  # noqa: BLE001
         logger.exception("capture: HTTP fallback failed: %s", httpe)
@@ -1106,4 +1180,8 @@ def capture_url(
             capture_block_evidence=combined_evidence,
             first_failed_capture_step=None,
             network_request_urls=[],
+            uses_https=str(url).lower().startswith("https://"),
+            tls_or_cert_error_detected=(http_reason == "http_tls_access_denied"),
+            insecure_scheme_detected=not str(url).lower().startswith("https://"),
+            security_state_reasons=list(dict.fromkeys([*playwright_reasons, http_reason])),
         )
