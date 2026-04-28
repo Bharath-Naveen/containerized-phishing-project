@@ -1,4 +1,4 @@
-"""Smoke test for AI adjudication compact audit outputs."""
+"""Smoke test for evidence adjudication compact audit outputs."""
 
 import pytest
 
@@ -16,5 +16,5 @@ def test_ai_adjudication_audit_writes_reports() -> None:
     assert rep["summary"]["n"] >= 1
     for suite in ("obvious_legit", "tricky_legit", "obvious_phish", "hard_phishing"):
         assert suite in rep["per_suite"]
-    assert (reports_dir() / "ai_adjudication_audit.json").is_file()
-    assert (reports_dir() / "ai_adjudication_audit.md").is_file()
+    assert (reports_dir() / "evidence_adjudication_audit.json").is_file()
+    assert (reports_dir() / "evidence_adjudication_audit.md").is_file()

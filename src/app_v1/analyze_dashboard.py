@@ -24,7 +24,6 @@ from src.pipeline.features.brand_signals import host_on_official_brand_apex
 from src.pipeline.paths import analysis_dir, ensure_layout
 from src.pipeline.safe_url import safe_hostname
 
-from .ai_adjudicator import run_ai_adjudication
 from .capture import capture_url
 from .config import PipelineConfig
 from .html_dom_anomaly_signals import extract_html_dom_anomaly_signals
@@ -38,7 +37,7 @@ from .legitimacy_bundle import (
     blend_ml_phish_for_legitimacy,
     build_legitimacy_bundle,
 )
-from .ml_layer1 import predict_layer1
+from .ml_layer1 import compute_layer1_model_agreement, predict_layer1
 from .org_style_signals import dampen_org_style_for_page_family, org_style_from_capture_blob
 from .schemas import utc_now_iso
 from .utils.download_models import resolve_fasttext_model_path
@@ -76,6 +75,7 @@ _FASTTEXT_MODEL_CACHE: Any = None
 _FASTTEXT_MODEL_ERROR: Optional[str] = None
 _TRUSTED_DOMAIN_REGISTRY_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE: Optional[List[Dict[str, Any]]] = None
+_PLATFORM_DOMAIN_REGISTRY_CACHE_PATH: Optional[str] = None
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _IMPERSONATION_BRAND_TOKENS = set(BRAND_TOKENS) | {"handshake"}
 
@@ -204,13 +204,16 @@ def _load_trusted_domain_registry(csv_path: str) -> Dict[str, Dict[str, Any]]:
 
 def _load_platform_domain_registry(csv_path: str) -> List[Dict[str, Any]]:
     global _PLATFORM_DOMAIN_REGISTRY_CACHE
-    if _PLATFORM_DOMAIN_REGISTRY_CACHE is not None:
-        return _PLATFORM_DOMAIN_REGISTRY_CACHE
+    global _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH
     p = Path(csv_path)
     if not p.is_absolute():
         p = (_REPO_ROOT / p).resolve()
+    resolved = str(p)
+    if _PLATFORM_DOMAIN_REGISTRY_CACHE is not None and _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH == resolved:
+        return _PLATFORM_DOMAIN_REGISTRY_CACHE
     if not p.is_file():
         _PLATFORM_DOMAIN_REGISTRY_CACHE = []
+        _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH = resolved
         return _PLATFORM_DOMAIN_REGISTRY_CACHE
     rows: List[Dict[str, Any]] = []
     try:
@@ -236,6 +239,7 @@ def _load_platform_domain_registry(csv_path: str) -> List[Dict[str, Any]]:
     except Exception:
         rows = []
     _PLATFORM_DOMAIN_REGISTRY_CACHE = rows
+    _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH = resolved
     return rows
 
 
@@ -1302,10 +1306,12 @@ def _is_strong_brand_domain_mismatch(
 ) -> bool:
     cap = layer2_capture or {}
     dom = html_dom_summary or {}
+    if bool(dom.get("trust_surface_brand_domain_mismatch")):
+        return True
     strength = str(cap.get("brand_domain_mismatch_strength") or "").lower()
     return bool(
         strength == "strong"
-        and (bool(cap.get("brand_domain_mismatch")) or bool(dom.get("trust_surface_brand_domain_mismatch")))
+        and bool(cap.get("brand_domain_mismatch"))
     )
 
 
@@ -1876,6 +1882,302 @@ def _apply_ml_overconfidence_cap(
     return float(capped), meta
 
 
+def _apply_evidence_adjudication_layer(
+    verdict: Dict[str, Any],
+    *,
+    ml: Dict[str, Any],
+    layer2_capture: Optional[Dict[str, Any]],
+    html_structure_summary: Optional[Dict[str, Any]],
+    html_dom_summary: Optional[Dict[str, Any]],
+    html_structure_risk: Optional[float],
+    html_dom_risk: Optional[float],
+    html_dom_enrichment: Optional[Dict[str, Any]] = None,
+    host_path_reasoning: Optional[Dict[str, Any]],
+    platform_context: Optional[Dict[str, Any]],
+    trust_blockers: List[str],
+    hosting_trust: Optional[Dict[str, Any]],
+    legitimacy_bundle: Optional[Dict[str, Any]],
+    verdict_cfg: Optional[Verdict3WayConfig] = None,
+) -> Dict[str, Any]:
+    out = dict(verdict)
+    cap = layer2_capture or {}
+    hs = html_structure_summary or {}
+    dom = html_dom_summary or {}
+    enrich = html_dom_enrichment or {}
+    hp = host_path_reasoning or {}
+    pctx = platform_context or {}
+    trust = hosting_trust or {}
+    bundle = legitimacy_bundle or {}
+    reasons = list(out.get("reasons") or [])
+    final_url = str(cap.get("final_url") or "")
+    final_host = _hostname(final_url)
+    final_reg = str(cap.get("final_registered_domain") or "").lower()
+    host_identity = str(hp.get("host_identity_class") or "")
+    host_legit_conf = str(hp.get("host_legitimacy_confidence") or "")
+    capture_failed = bool(cap.get("capture_failed"))
+    html_missing_reason = str(enrich.get("html_capture_missing_reason") or "").strip().lower()
+    html_dom_unavailable = bool(
+        capture_failed
+        or html_missing_reason in {"html_not_available", "html_parse_partial"}
+        or (html_structure_risk is None)
+        or (html_dom_risk is None)
+        or not bool(hs)
+        or not bool(dom)
+    )
+
+    try:
+        p_cal = ml.get("phish_proba_calibrated")
+        p_raw = ml.get("phish_proba")
+        p = float(p_cal if p_cal is not None else p_raw)
+    except Exception:
+        p = 0.0
+    agr = ml.get("model_agreement") if isinstance(ml.get("model_agreement"), dict) else {}
+    cons = str(agr.get("ml_consensus") or "")
+
+    hard_blockers: List[str] = []
+    if int(dom.get("form_action_external_domain_count") or 0) > 0 and int(hs.get("password_input_count") or 0) > 0:
+        hard_blockers.append("cross_domain_credential_form_action")
+    if bool(pctx.get("platform_context_type") == "cloud_hosted_brand_impersonation") or bool(out.get("cloud_hosted_brand_impersonation")):
+        hard_blockers.append("cloud_hosted_brand_impersonation")
+    if bool(dom.get("suspicious_credential_collection_pattern") or dom.get("login_harvester_pattern")):
+        hard_blockers.append("credential_harvesting_pattern")
+    official_like_host = bool(host_on_official_brand_apex(final_host)) or host_identity == "official_brand_auth"
+    same_reg_domain = bool(
+        str(cap.get("input_registered_domain") or "")
+        and str(cap.get("input_registered_domain") or "") == str(cap.get("final_registered_domain") or "")
+    )
+    no_brand_mismatch = not bool(cap.get("brand_domain_mismatch"))
+    same_domain_forms = int(dom.get("form_action_external_domain_count") or 0) == 0
+    ml_not_high_or_strong_legit = cons == "strong_legitimate" or p < 0.70
+    wrapper_official_authwall_safe = bool(
+        official_like_host
+        and same_reg_domain
+        and no_brand_mismatch
+        and same_domain_forms
+        and ml_not_high_or_strong_legit
+        and host_legit_conf == "high"
+    )
+    if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
+        if wrapper_official_authwall_safe:
+            # Official first-party authwall/login wrappers are ambiguity context, not hard blockers.
+            pass
+        else:
+            hard_blockers.append("wrapper_or_interstitial_redirect_pattern")
+    if bool(cap.get("contains_punycode") or cap.get("contains_non_ascii")) and int(hs.get("password_input_count") or 0) > 0:
+        hard_blockers.append("punycode_or_non_ascii_with_credential_context")
+
+    phish_signals: List[str] = []
+    legit_signals: List[str] = []
+    amb_signals: List[str] = []
+    phish_score = 0.0
+    legit_score = 0.0
+
+    if p >= 0.85:
+        phish_score += 0.35
+        phish_signals.append("high_ml_score")
+    elif p >= 0.70:
+        phish_score += 0.20
+        phish_signals.append("elevated_ml_score")
+    elif p >= 0.50:
+        amb_signals.append("moderate_ml_score")
+
+    if cons == "strong_phishing":
+        phish_score += 0.12
+        phish_signals.append("ml_consensus_strong_phishing")
+    elif cons == "strong_legitimate":
+        legit_score += 0.12
+        legit_signals.append("ml_consensus_strong_legitimate")
+    if cons == "split":
+        amb_signals.append("ml_consensus_split")
+        if not hard_blockers and phish_score < 0.40:
+            legit_score += 0.06
+    elif cons == "boosted_only":
+        amb_signals.append("boosted_models_only_flag_phishing")
+    spr = agr.get("ml_prob_spread")
+    if isinstance(spr, (int, float)) and float(spr) > 0.4:
+        amb_signals.append("high_model_probability_spread")
+    if wrapper_official_authwall_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
+        amb_signals.append("official_authwall_wrapper_pattern")
+
+    if host_identity == "suspicious_host_pattern":
+        phish_score += 0.30
+        phish_signals.append("suspicious_host_pattern")
+        if str(pctx.get("platform_context_type") or "") == "user_hosted_subdomain":
+            phish_score += 0.30
+            phish_signals.append("suspicious_user_hosted_subdomain")
+    if _is_strong_brand_domain_mismatch(cap, dom):
+        phish_score += 0.30
+        phish_signals.append("strong_brand_domain_mismatch")
+    if bool(out.get("dormant_phishing_infra_detected")):
+        phish_score += 0.40
+        phish_signals.append("dormant_phishing_infrastructure")
+    if bool(cap.get("capture_failure_suspicious")):
+        phish_score += 0.20
+        phish_signals.append("capture_failure_suspicious")
+    if bool(cap.get("final_domain_is_free_hosting")) and bool(_is_strong_brand_domain_mismatch(cap, dom)):
+        phish_score += 0.25
+        phish_signals.append("free_hosted_brand_impersonation")
+    if str(dom.get("page_family") or "") == "auth_login_recovery" and str(pctx.get("platform_context_type") or "") not in {
+        "official_platform_domain",
+        "official_platform_login",
+    }:
+        phish_score += 0.20
+        phish_signals.append("auth_context_on_non_official_domain")
+
+    # Strong phishing evidence: brand token in subdomain not matching registrable family + suspicious/low host legitimacy.
+    brand_subdomain_impersonation = False
+    if final_host and final_reg and final_host.endswith("." + final_reg):
+        sub_label = final_host[: -(len(final_reg) + 1)].lower()
+        for tok in _IMPERSONATION_BRAND_TOKENS:
+            t = str(tok or "").strip().lower()
+            if len(t) < 3:
+                continue
+            if t in sub_label and t not in final_reg:
+                brand_subdomain_impersonation = True
+                break
+    if brand_subdomain_impersonation and (host_identity == "suspicious_host_pattern" or host_legit_conf == "low"):
+        phish_score += 0.35
+        phish_signals.append("brand_subdomain_impersonation")
+
+    if (
+        str(cap.get("input_registered_domain") or "")
+        and str(cap.get("input_registered_domain") or "") == str(cap.get("final_registered_domain") or "")
+        and host_identity != "suspicious_host_pattern"
+    ):
+        legit_score += 0.20
+        legit_signals.append("same_domain_consistency")
+    elif str(cap.get("input_registered_domain") or "") and str(cap.get("input_registered_domain") or "") == str(
+        cap.get("final_registered_domain") or ""
+    ):
+        amb_signals.append("same_domain_on_suspicious_registrable")
+    if str(pctx.get("platform_context_type") or "") in {"official_platform_domain", "official_platform_login"}:
+        legit_score += 0.30
+        legit_signals.append("official_platform_domain")
+    hts = str(trust.get("hosting_trust_status") or "")
+    if hts == "hosting_trust_verified":
+        legit_score += 0.35
+        legit_signals.append("hosting_trust_verified")
+    elif hts == "hosting_trust_partial":
+        legit_score += 0.25
+        legit_signals.append("hosting_trust_partial")
+    if (not html_dom_unavailable) and int(hs.get("password_input_count") or 0) == 0 and not bool(dom.get("suspicious_credential_collection_pattern")):
+        legit_score += 0.25
+        legit_signals.append("no_credential_capture")
+    if (not html_dom_unavailable) and int(dom.get("form_action_external_domain_count") or 0) == 0:
+        legit_score += 0.20
+        legit_signals.append("no_cross_domain_forms")
+    free_hosted_brand_imp = bool(cap.get("final_domain_is_free_hosting")) and bool(_is_strong_brand_domain_mismatch(cap, dom))
+    cloud_hosted_brand_imp = bool(
+        pctx.get("platform_context_type") == "cloud_hosted_brand_impersonation"
+    ) or bool(out.get("cloud_hosted_brand_impersonation"))
+    impersonation_hosting_context = bool(free_hosted_brand_imp or cloud_hosted_brand_imp)
+
+    if (not impersonation_hosting_context) and (
+        bool(dom.get("content_rich_profile"))
+        or str(dom.get("page_family") or "") in {
+        "article_news",
+        "content_feed_forum_aggregator",
+        "public_docs_or_reference",
+        "generic_landing",
+        }
+    ):
+        legit_score += 0.20
+        legit_signals.append("content_rich_page")
+    if (not impersonation_hosting_context) and (float(html_dom_risk) if isinstance(html_dom_risk, (int, float)) else 1.0) <= 0.20 and (
+        float(html_structure_risk) if isinstance(html_structure_risk, (int, float)) else 1.0
+    ) <= 0.30:
+        legit_score += 0.20
+        legit_signals.append("low_html_dom_risk")
+    if bool(hs.get("has_support_help_links")) and int(hs.get("nav_link_count") or 0) >= 4 and int(hs.get("footer_link_count") or 0) >= 2:
+        legit_score += 0.15
+        legit_signals.append("rich_nav_footer_support")
+
+    if bool(cap.get("brand_domain_mismatch")) and not _is_strong_brand_domain_mismatch(cap, dom):
+        amb_signals.append("weak_brand_mismatch")
+    if int(cap.get("encoded_char_count") or 0) > 0 or int(cap.get("suspicious_keyword_count") or 0) > 0:
+        amb_signals.append("url_tracking_or_length_noise")
+    if bool(out.get("inactive_site_detected")):
+        amb_signals.append("inactive_site_context")
+    if html_dom_unavailable:
+        amb_signals.append("html_dom_unavailable")
+    if phish_score >= 0.45 and legit_score >= 0.45:
+        amb_signals.append("ml_structural_disagreement")
+
+    evidence_conf = int(bool(phish_signals)) + int(bool(legit_signals)) + int(bool(amb_signals))
+    freehost_mismatch_consensus_escalation = bool(
+        "free_hosted_brand_impersonation" in phish_signals
+        and "strong_brand_domain_mismatch" in phish_signals
+        and "ml_consensus_strong_phishing" in phish_signals
+    )
+
+    if hard_blockers:
+        final_label = "likely_phishing"
+    elif freehost_mismatch_consensus_escalation:
+        final_label = "likely_phishing"
+    elif capture_failed and host_identity == "suspicious_host_pattern":
+        if p >= 0.95:
+            final_label = "likely_phishing"
+        elif p >= 0.80 and brand_subdomain_impersonation:
+            final_label = "likely_phishing"
+        elif brand_subdomain_impersonation and host_legit_conf == "low":
+            final_label = "likely_phishing"
+        else:
+            final_label = "uncertain"
+    elif str(pctx.get("platform_context_type") or "") == "official_platform_login" and p >= 0.85:
+        # Keep high-ML official login disagreement conservative.
+        final_label = "uncertain"
+    elif capture_failed and html_dom_unavailable:
+        # Evidence-gap condition: absence-based structural legitimacy cannot establish safety.
+        final_label = "uncertain"
+    elif (
+        str(pctx.get("platform_context_type") or "") == "user_hosted_subdomain"
+        and str(hp.get("host_identity_class") or "") == "suspicious_host_pattern"
+        and phish_score >= 0.60
+    ):
+        final_label = "likely_phishing"
+    elif phish_score >= 0.70 and evidence_conf >= 2:
+        final_label = "likely_phishing"
+    elif bool(out.get("inactive_site_detected")):
+        final_label = "uncertain"
+    elif legit_score >= 0.70 and phish_score < 0.45:
+        final_label = "likely_legitimate"
+    else:
+        final_label = "uncertain"
+
+    out["evidence_adjudication_applied"] = True
+    out["evidence_adjudication_verdict"] = final_label
+    out["evidence_phishing_score"] = round(float(phish_score), 4)
+    out["evidence_legitimacy_score"] = round(float(legit_score), 4)
+    out["evidence_confidence"] = int(evidence_conf)
+    out["evidence_hard_blockers"] = hard_blockers
+    out["evidence_phishing_signals"] = phish_signals
+    out["evidence_legitimacy_signals"] = legit_signals
+    out["evidence_ambiguity_signals"] = amb_signals
+    out["evidence_adjudication_reasons"] = (
+        [f"hard_blocker:{b}" for b in hard_blockers[:4]]
+        + [f"phishing_signal:{s}" for s in phish_signals[:4]]
+        + [f"legitimacy_signal:{s}" for s in legit_signals[:4]]
+        + [f"ambiguity_signal:{s}" for s in amb_signals[:3]]
+    )
+    out["verdict_3way"] = final_label
+    out["label"] = final_label
+    out["confidence"] = "medium" if final_label != "uncertain" else "low"
+    if final_label == "likely_phishing":
+        out["combined_score"] = max(float(out.get("combined_score") or 0.0), float((verdict_cfg or Verdict3WayConfig()).combined_high))
+    elif final_label == "likely_legitimate":
+        out["combined_score"] = min(float(out.get("combined_score") or 0.0), float((verdict_cfg or Verdict3WayConfig()).combined_low) - 1e-3)
+    reasons.extend(["Final Evidence Review applied deterministic evidence adjudication."])
+    if html_dom_unavailable:
+        reasons.extend(
+            [
+                "Capture/HTML/DOM evidence was unavailable; absence-based safety signals were not credited.",
+                "Page could not be validated fully due to missing live/HTML/DOM evidence.",
+            ]
+        )
+    out["reasons"] = reasons
+    return out
+
+
 def no_phishing_evidence_guard(
     *,
     html_structure_summary: Optional[Dict[str, Any]],
@@ -1941,7 +2243,6 @@ def build_dashboard_analysis(
     *,
     reinforcement: bool = True,
     layer1_use_dns: bool = False,
-    ai_adjudication: bool = True,
     verdict_cfg: Optional[Verdict3WayConfig] = None,
 ) -> Tuple[Dict[str, Any], List[str]]:
     """Core analysis dict + evidence gap strings (no file write)."""
@@ -1951,6 +2252,7 @@ def build_dashboard_analysis(
     evidence_gaps: List[str] = []
     ml = predict_layer1(url, use_dns=layer1_use_dns)
     ml = _apply_official_brand_apex_cap(ml, url)
+    ml["model_agreement"] = compute_layer1_model_agreement(url, ml, use_dns=layer1_use_dns)
     if ml.get("error"):
         evidence_gaps.append("Layer-1 ML did not produce a score (missing model or feature error).")
 
@@ -2288,47 +2590,7 @@ def build_dashboard_analysis(
         verdict_cfg=verdict_cfg,
     )
 
-    ai_block = run_ai_adjudication(
-        input_url=url,
-        layer1_ml=ml,
-        reinforcement=reinforcement_block,
-        verdict_pre_ai=verdict,
-        legitimacy_bundle=bundle,
-        html_structure_summary=html_structure.get("html_structure_summary"),
-        html_structure_risk_score=html_structure.get("html_structure_risk_score"),
-        html_structure_reasons=html_structure.get("html_structure_reasons"),
-        html_dom_anomaly_summary=html_dom.get("html_dom_anomaly_summary"),
-        html_dom_anomaly_risk_score=html_dom.get("html_dom_anomaly_risk_score"),
-        html_dom_anomaly_reasons=html_dom.get("html_dom_anomaly_reasons"),
-        html_dom_visual_assessment=html_dom.get("html_dom_visual_assessment"),
-        host_path_reasoning=host_path_reasoning,
-        evidence_gaps=evidence_gaps,
-        capture_json=capture_json,
-        enabled=ai_adjudication,
-        verdict_cfg=verdict_cfg,
-        html_capture_missing_reason=hcmr_s,
-        html_structure_error=hse_s,
-        html_dom_anomaly_error=hde_s,
-        pre_verdict_before_ml_capture_miss_safety=pre_ml_capture_miss_safety_verdict,
-    )
-    verdict["ai_adjudication"] = ai_block
-    if ai_block.get("ran") and isinstance(ai_block.get("adjustment"), dict):
-        adj = ai_block["adjustment"]
-        if adj.get("applied"):
-            post_score = adj.get("post_ai_score")
-            post_verdict = adj.get("post_ai_verdict")
-            if isinstance(post_score, (int, float)):
-                verdict["combined_score_pre_ai"] = verdict.get("combined_score")
-                verdict["combined_score"] = float(post_score)
-                verdict["ai_adjustment_applied"] = float(adj.get("adjustment_applied") or 0.0)
-            if post_verdict:
-                verdict["verdict_3way_pre_ai"] = verdict.get("verdict_3way")
-                verdict["verdict_3way"] = post_verdict
-                verdict["label"] = post_verdict
-                verdict["confidence"] = "medium" if post_verdict != "uncertain" else "low"
-                verdict["reasons"] = list(verdict.get("reasons") or []) + [
-                    f"AI adjudication applied bounded adjustment {float(adj.get('adjustment_applied') or 0.0):+.3f}; post-AI verdict={post_verdict}."
-                ]
+    _ = pre_ml_capture_miss_safety_verdict
     # Hard no-phishing-evidence override always applies last.
     verdict = _apply_no_phishing_evidence_override(verdict, guard_triggered=guard_on, verdict_cfg=verdict_cfg)
     verdict = _apply_ml_phishing_capture_miss_legitimacy_safety(
@@ -2339,6 +2601,22 @@ def build_dashboard_analysis(
         html_capture_missing_reason=hcmr_s,
         html_structure_error=hse_s,
         html_dom_anomaly_error=hde_s,
+        verdict_cfg=verdict_cfg,
+    )
+    verdict = _apply_evidence_adjudication_layer(
+        verdict,
+        ml=ml,
+        layer2_capture=capture_for_policy,
+        html_structure_summary=html_structure.get("html_structure_summary"),
+        html_dom_summary=html_dom.get("html_dom_anomaly_summary"),
+        html_structure_risk=html_structure.get("html_structure_risk_score"),
+        html_dom_risk=html_dom.get("html_dom_anomaly_risk_score"),
+        html_dom_enrichment=layer3_enrichment,
+        host_path_reasoning=host_path_reasoning,
+        platform_context=platform_context,
+        trust_blockers=trust_blockers,
+        hosting_trust=hosting_trust,
+        legitimacy_bundle=bundle,
         verdict_cfg=verdict_cfg,
     )
     verdict = _apply_inactive_site_overlay(
@@ -2376,14 +2654,12 @@ def analyze_url_dashboard(
     *,
     reinforcement: bool = True,
     layer1_use_dns: bool = False,
-    ai_adjudication: bool = True,
     verdict_cfg: Optional[Verdict3WayConfig] = None,
 ) -> Dict[str, Any]:
     out, _ = build_dashboard_analysis(
         url,
         reinforcement=reinforcement,
         layer1_use_dns=layer1_use_dns,
-        ai_adjudication=ai_adjudication,
         verdict_cfg=verdict_cfg,
     )
     analysis_dir().mkdir(parents=True, exist_ok=True)
@@ -2407,13 +2683,11 @@ def main() -> None:
     ap.add_argument("--url", required=True)
     ap.add_argument("--no-reinforcement", action="store_true")
     ap.add_argument("--layer1-use-dns", action="store_true")
-    ap.add_argument("--no-ai-adjudication", action="store_true")
     args = ap.parse_args()
     row = analyze_url_dashboard(
         args.url,
         reinforcement=not args.no_reinforcement,
         layer1_use_dns=args.layer1_use_dns,
-        ai_adjudication=not args.no_ai_adjudication,
     )
     print(json.dumps(row, indent=2, ensure_ascii=False))
 

@@ -4,7 +4,7 @@ This repository provides a layered phishing detection system for URL triage and 
 
 - Layer 1: fast ML triage on URL/host features.
 - Layer 2: optional live capture + HTML/DOM + host/path reasoning.
-- Layer 3: bounded AI adjudication over compact evidence only.
+- Layer 3: deterministic Evidence Adjudication Layer (EAL) over structured evidence categories.
 - Layer 4: final explainable verdict with guardrails and evidence gaps.
 
 The project is optimized for team collaboration: active code is under `src/app_v1` and `src/pipeline`, deprecated screenshot-first workflows are preserved under `archive/legacy` and clearly labeled.
@@ -17,7 +17,7 @@ The original screenshot-comparison UX was useful for demos, but weak for product
 - struggled with modern dynamic layouts and localization,
 - offered limited explainability versus structured signals.
 
-The current architecture favors structured, auditable evidence (DOM/form/link/host/path) and bounded AI support. Legacy screenshot code remains available in `archive/legacy` for reference.
+The current architecture favors structured, auditable evidence (DOM/form/link/host/path) and deterministic evidence adjudication. Legacy screenshot code remains available in `archive/legacy` for reference.
 
 ## Current Layered Architecture
 
@@ -26,7 +26,7 @@ See full details in `docs/ARCHITECTURE.md`.
 1. `src/pipeline`:
    - data ingestion, cleaning, feature extraction, splits, training/evaluation, audits.
 2. `src/app_v1`:
-   - runtime URL analysis, capture, DOM anomaly extraction, host/path reasoning, AI adjudication, Streamlit UI.
+   - runtime URL analysis, capture, DOM anomaly extraction, host/path reasoning, deterministic evidence adjudication, Streamlit UI.
 3. final output:
    - explainable JSON from `src/app_v1/analyze_dashboard.py`.
 
@@ -120,15 +120,21 @@ For deployment configuration, trusted-domain registry format, and operational sa
 
 - `docs/DEPLOYMENT_NOTES.md`
 
+## Deployment Verdict Path
+
+Final verdicts are produced by a deterministic Evidence Adjudication Layer that accumulates phishing and legitimacy signals, requires corroboration across independent evidence sources, and preserves non-overridable hard blockers.
+
+External AI adjudication is removed from the deployment runtime path; no API key is required for normal dashboard or CLI operation.
+
 ## Dashboard Sections (What They Mean)
 
 - **Verdict**: final label/confidence/combined score with reasons.
-- **Layer-1 ML**: URL/host classifier output and top linear signals.
+- **Layer-1 ML**: URL/host classifier output and top linear signals. Optional witness models in `outputs/models/` (`logistic_regression`, `random_forest`, `xgboost`, `lightgbm`) add agreement signals only; the primary artifact (`layer1_primary.joblib`) stays authoritative for ML probability, and EAL uses consensus or disagreement as evidence—not a replacement verdict.
 - **Reinforcement**: live capture status + org-style risk.
 - **HTML Structure Signals**: compact DOM structure summary.
 - **HTML / DOM Anomaly Review**: mismatch/interstitial/harvester evidence.
 - **Host / Path reasoning**: host legitimacy and path-conformity assessment.
-- **AI Adjudication**: bounded post-check (if enabled and eligible).
+- **Final Evidence Review**: deterministic evidence taxonomy + scoring + conservative decision rule.
 - **Evidence gaps**: known blind spots from failed/partial capture.
 
 ## Strengths
@@ -144,7 +150,7 @@ For deployment configuration, trusted-domain registry format, and operational sa
 - Layer-1 may still over-score some legitimate long-tail domains.
 - Live capture quality depends on network/captcha/bot defenses.
 - Heuristic layers can produce edge-case noise on unusual public pages.
-- AI adjudication is optional and API-dependent.
+- External AI adjudication is removed from the deployment runtime path.
 
 ## Repository Structure
 
@@ -218,10 +224,10 @@ The system evaluates a website in several steps:
    - Evaluates the domain and URL path  
    - Determines if the URL structure is normal or suspicious  
 
-5. **AI Adjudication (Optional)**  
-   - Used only for borderline cases  
-   - Reviews structured evidence (not raw HTML)  
-   - Provides a bounded adjustment to the decision  
+5. **Evidence Adjudication Layer (Deterministic)**  
+   - Accumulates phishing and legitimacy evidence categories  
+   - Requires corroboration across independent evidence sources  
+   - Preserves non-overridable hard blockers  
 
 6. **Final Safety Guardrail**  
    - If the page shows **no phishing behavior** (no credential capture, no impersonation, no deceptive redirects),  
@@ -252,8 +258,8 @@ When you analyze a URL in the frontend, each section represents a part of the de
 - **Host / Path Reasoning**  
   Whether the domain and URL path look legitimate or suspicious  
 
-- **AI Adjudication**  
-  Optional AI-based reasoning used only for uncertain cases  
+- **Final Evidence Review**  
+  Deterministic scoring over structured evidence categories  
 
 - **Evidence Gaps**  
   Missing signals due to capture issues or blocked content  

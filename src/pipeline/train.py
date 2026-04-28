@@ -483,7 +483,9 @@ def train(
             logger.warning("Audit-URL mean phish skipped: %s", ex)
             m["audit_official_https_mean_phish_proba"] = None
         metrics_all.append(m)
-        joblib.dump(pipe, models_dir() / f"{name}.joblib")
+        out_m = models_dir() / f"{name}.joblib"
+        joblib.dump(pipe, out_m)
+        logger.info("Saved model: %s", out_m.name)
 
         _export_misclassifications(name, pipe, X_test, y_test, meta_test)
 

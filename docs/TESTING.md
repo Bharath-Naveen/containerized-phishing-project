@@ -12,7 +12,7 @@ Focus:
 
 - feature extraction behavior
 - decision policy guardrails
-- AI adjudication bounded logic
+- deterministic evidence adjudication logic
 - host/path + DOM anomaly regressions
 
 ## 2) Pipeline smoke test
@@ -63,7 +63,7 @@ Validate that each section renders:
 - HTML structure
 - HTML / DOM anomaly
 - Host/path reasoning
-- AI adjudication
+- evidence adjudication
 
 ## 5) Optional targeted tests
 

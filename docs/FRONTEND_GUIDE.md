@@ -27,7 +27,6 @@ python -m src.app_v1.analyze_dashboard --url <URL>
 - URL to analyze
 - Reinforcement toggle (live capture + org-style checks)
 - Layer-1 DNS toggle
-- AI adjudication toggle
 
 ## Section-by-Section
 
@@ -72,13 +71,15 @@ Richer mismatch reasoning:
 - interstitial/wrapper cues
 - content-family dampening metadata
 
-### AI Adjudication
+### Final Evidence Review
 
-Shown only when enabled and eligible.
+Deterministic evidence adjudication output:
 
-- AI assessment + confidence
-- bounded score adjustment
-- legitimacy/suspicion/uncertainty notes
+- phishing evidence score
+- legitimacy evidence score
+- hard blockers
+- ambiguity signals
+- reason trail
 
 ### Host / Path Reasoning
 
@@ -92,7 +93,7 @@ Shown only when enabled and eligible.
 1. Start from Verdict + Evidence Gaps.
 2. Confirm if strong phishing indicators exist (credentials/forms/deceptive host).
 3. Use DOM + host/path sections for explainability.
-4. Use AI notes only as bounded support, not as sole truth.
+4. Use Final Evidence Review scores/signals as the authoritative verdict basis.
 
 ## Troubleshooting
 
@@ -100,5 +101,4 @@ Shown only when enabled and eligible.
   - run CLI directly: `python -m src.app_v1.analyze_dashboard --url "https://example.com"`
 - Incomplete reinforcement:
   - check Docker/network and capture strategy in output.
-- AI section skipped:
-  - verify `OPENAI_API_KEY` and eligibility conditions.
+- No API key is required for standard dashboard operation.

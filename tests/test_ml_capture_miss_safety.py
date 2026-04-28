@@ -205,12 +205,9 @@ def test_deterministic_safety_with_ai_disabled_after_no_phishing_override() -> N
                     out, _gaps = build_dashboard_analysis(
                         "https://evil-phish-login-verify.example/fake",
                         reinforcement=True,
-                        ai_adjudication=False,
                     )
     verdict = out.get("verdict") or {}
     assert verdict.get("verdict_3way") == "uncertain"
     assert verdict.get("ml_phishing_capture_miss_safety_applied") is True
     assert verdict.get("combined_score_pre_ml_capture_miss_safety") is not None
     assert any("Deterministic safety guardrail applied" in r for r in (verdict.get("reasons") or []))
-    ai = verdict.get("ai_adjudication") or {}
-    assert ai.get("ran") is not True

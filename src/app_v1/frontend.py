@@ -33,7 +33,6 @@ def _run_dashboard_subprocess(
     url: str,
     reinforcement: bool,
     layer1_dns: bool,
-    ai_adjudication: bool,
 ) -> Dict[str, Any]:
     cmd = [
         sys.executable,
@@ -46,8 +45,6 @@ def _run_dashboard_subprocess(
         cmd.append("--no-reinforcement")
     if layer1_dns:
         cmd.append("--layer1-use-dns")
-    if not ai_adjudication:
-        cmd.append("--no-ai-adjudication")
     env = os.environ.copy()
     sep = os.pathsep
     root = str(_REPO_ROOT)
@@ -146,20 +143,17 @@ def _add_status_badges(verdict: Dict[str, Any], gaps: List[str]) -> None:
 def render_evidence_summary(
     verdict_reasons: List[str],
     dom_reasons: List[str],
-    ai_block: Dict[str, Any],
     gaps: List[str],
     capture_cap: Optional[Dict[str, Any]] = None,
 ) -> None:
-    render_layer_section("Final Explanation / Evidence Summary", "Consolidated explanation across all layers.")
-    ai_res = (ai_block or {}).get("ai_result") or {}
+    render_layer_section("Evidence Adjudication", "Consolidated deterministic evidence review across all layers.")
     cap = capture_cap or {}
     susp = list(dom_reasons or []) + [f"Verdict reason: {r}" for r in (verdict_reasons or []) if "phish" in r.lower() or "risk" in r.lower()]
     if cap.get("capture_failure_suspicious"):
         susp.append(
             "Live capture failed or was blocked, which can occur with evasive phishing pages."
         )
-    legit = [f"AI legit: {x}" for x in (ai_res.get("reasons_for_legitimacy") or [])]
-    legit += [f"Verdict reason: {r}" for r in (verdict_reasons or []) if "legit" in r.lower() or "reduce" in r.lower()]
+    legit = [f"Verdict reason: {r}" for r in (verdict_reasons or []) if "legit" in r.lower() or "reduce" in r.lower()]
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown("**Signals Supporting Phishing**")
@@ -206,7 +200,7 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
         f"<div style='border:1.2px solid {color};border-radius:14px;padding:1.1rem 1.2rem;background:rgba(2,6,23,.55);'>"
         f"<div style='font-size:.9rem;color:#94a3b8;font-weight:650;'>Assessment</div>"
         f"<div style='font-size:1.95rem;font-weight:820;color:{color};margin:.15rem 0 .5rem 0;line-height:1.15;'>{vlabel}</div>"
-        f"<div style='color:#dbeafe;font-size:1rem;line-height:1.35;'>This verdict combines URL/host ML scoring, live webpage reinforcement, HTML/DOM structure signals, and optional AI adjudication.</div>"
+        f"<div style='color:#dbeafe;font-size:1rem;line-height:1.35;'>This verdict combines URL/host ML scoring, live webpage reinforcement, HTML/DOM structure signals, and deterministic final evidence adjudication.</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -350,14 +344,24 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
                 "ml_overconfidence_cap_reason": verdict.get("ml_overconfidence_cap_reason"),
                 "ml_score_before_overconfidence_cap": verdict.get("ml_score_before_overconfidence_cap"),
                 "ml_score_after_overconfidence_cap": verdict.get("ml_score_after_overconfidence_cap"),
+                "evidence_adjudication_applied": verdict.get("evidence_adjudication_applied"),
+                "evidence_adjudication_verdict": verdict.get("evidence_adjudication_verdict"),
+                "evidence_phishing_score": verdict.get("evidence_phishing_score"),
+                "evidence_legitimacy_score": verdict.get("evidence_legitimacy_score"),
+                "evidence_confidence": verdict.get("evidence_confidence"),
+                "evidence_hard_blockers": verdict.get("evidence_hard_blockers"),
+                "evidence_phishing_signals": verdict.get("evidence_phishing_signals"),
+                "evidence_legitimacy_signals": verdict.get("evidence_legitimacy_signals"),
+                "evidence_ambiguity_signals": verdict.get("evidence_ambiguity_signals"),
+                "evidence_adjudication_reasons": verdict.get("evidence_adjudication_reasons"),
             }
         )
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
     # Layer 1
     render_layer_section(
-        "Layer 1: URL / Host ML Triage",
-        "Uses trained ML features from the URL and host structure to estimate phishing probability.",
+        "Layer 1: ML Layer + Model Agreement",
+        "Uses trained URL/host ML features for primary scoring, with optional multi-model agreement as supporting evidence.",
     )
     if ml.get("error"):
         st.warning(f"ML unavailable: {ml.get('error')}")
@@ -371,6 +375,32 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
     st.caption("What this means: this is the fastest first-pass risk estimate from URL/host features, before deep page reasoning.")
     with st.expander("Layer 1 details / raw features"):
         st.write({"canonical_url": ml.get("canonical_url"), "model_path": ml.get("model_path")})
+        agr = ml.get("model_agreement") if isinstance(ml.get("model_agreement"), dict) else {}
+        if agr.get("ml_model_outputs") or agr.get("agreement_error"):
+            st.markdown("**Multi-model agreement (witness only)**")
+            st.caption(
+                "Extra models vote at 0.5 on raw P(phish); primary Layer-1 probability above stays the ML score."
+            )
+            st.write(
+                {
+                    "ml_consensus": agr.get("ml_consensus"),
+                    "ml_model_votes_phishing": agr.get("ml_model_votes_phishing"),
+                    "ml_model_votes_legitimate": agr.get("ml_model_votes_legitimate"),
+                    "ml_prob_spread": agr.get("ml_prob_spread"),
+                    "ml_models_available": agr.get("ml_models_available"),
+                    "conservative_model_phishing": agr.get("conservative_model_phishing"),
+                    "primary_model_phishing": agr.get("primary_model_phishing"),
+                    "boosted_models_phishing": agr.get("boosted_models_phishing"),
+                    "agreement_error": agr.get("agreement_error"),
+                }
+            )
+            outs = agr.get("ml_model_outputs") or []
+            if outs:
+                st.dataframe(outs, use_container_width=True)
+        elif agr.get("ml_consensus") == "unavailable":
+            st.caption(
+                "Multi-model agreement: fewer than two witness models in outputs/models (primary-only mode)."
+            )
         tops = ml.get("top_linear_signals") or []
         if tops:
             st.dataframe(tops, use_container_width=True)
@@ -380,7 +410,7 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
 
     # Layer 2
     render_layer_section(
-        "Layer 2: Live Fetch Reinforcement",
+        "Layer 2: Live Capture / Reinforcement",
         "Re-fetches the live page in a containerized browser/HTTP fallback to inspect redirects, final URL, blocking, and organization-style behavior.",
     )
     if rein.get("error"):
@@ -491,8 +521,8 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
 
     # Layer 3
     render_layer_section(
-        "Layer 3: HTML / DOM Structure Signals",
-        "Examines HTML structure such as forms, password inputs, external form actions, sparse login layouts, support links, and DOM anomalies.",
+        "Layer 3: Structural Signals",
+        "Examines HTML/DOM structure such as forms, password inputs, external actions, sparse login layouts, support links, and anomaly signals.",
     )
     hs = htmls.get("html_structure_summary")
     da = hdom.get("html_dom_anomaly_summary")
@@ -555,47 +585,31 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
     with st.expander("Layer 3 raw HTML/DOM/host-path evidence"):
         st.write({"html_structure": htmls, "html_dom_anomaly": hdom, "html_dom_enrichment": html_enrich, "host_path_reasoning": hpr})
 
-    # Layer 4
+    # Final Evidence Review (deterministic)
     render_layer_section(
-        "Layer 4: AI Adjudication",
-        "Uses AI adjudication only as an explainability/review layer, especially when model and rule-based signals disagree or confidence is low.",
+        "Evidence Adjudication Layer",
+        "Deterministic adjudication combining phishing, legitimacy, hard-blocker, ambiguity, and model-agreement evidence.",
     )
-    ai = verdict.get("ai_adjudication") or {}
-    if not ai.get("enabled", True):
-        st.info("AI adjudication disabled.")
-    elif not ai.get("ran"):
-        msg = ai.get("skip_reason") or "not_run"
-        if ai.get("ai_error"):
-            msg += f" ({ai.get('ai_error')})"
-        st.info(f"AI adjudication did not run: {msg}")
-        if ai.get("eligibility_reasons"):
-            st.caption("Eligibility: " + ", ".join(ai.get("eligibility_reasons") or []))
-    else:
-        ai_res = ai.get("ai_result") or {}
-        adj = ai.get("adjustment") or {}
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            render_metric_card("AI Assessment", str(ai_res.get("ai_assessment") or "N/A").replace("_", " ").title())
-        with c2:
-            render_metric_card("AI Confidence", str(ai_res.get("ai_confidence") or "N/A").title())
-        with c3:
-            render_metric_card("AI Adjustment", f"{float(adj.get('adjustment_applied') or 0):+.3f}")
-        st.caption("What this means: AI can explain and nudge scores within strict bounds; it is not the sole source of truth.")
-        st.markdown(str(ai_res.get("summary") or "No AI summary provided."))
-        for r in ai_res.get("reasons_for_legitimacy") or []:
-            st.markdown(f"- Legit signal: {r}")
-        for r in ai_res.get("reasons_for_suspicion") or []:
-            st.markdown(f"- Suspicion signal: {r}")
-        for r in ai_res.get("uncertainty_notes") or []:
-            st.markdown(f"- Uncertainty: {r}")
-    with st.expander("Layer 4 raw AI adjudication JSON"):
-        st.write(ai)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        render_metric_card("Phishing Evidence Score", f"{float(verdict.get('evidence_phishing_score') or 0.0):.3f}")
+    with c2:
+        render_metric_card("Legitimacy Evidence Score", f"{float(verdict.get('evidence_legitimacy_score') or 0.0):.3f}")
+    with c3:
+        render_metric_card("Evidence Confidence", str(verdict.get("evidence_confidence") or "0"))
+    if verdict.get("evidence_hard_blockers"):
+        st.markdown("**Hard Blockers**")
+        for b in verdict.get("evidence_hard_blockers") or []:
+            st.markdown(f"- {b}")
+    if verdict.get("evidence_adjudication_reasons"):
+        st.markdown("**Top Evidence Reasons**")
+        for r in (verdict.get("evidence_adjudication_reasons") or [])[:6]:
+            st.markdown(f"- {r}")
 
-    # Final explanation
+    # Evidence adjudication summary
     render_evidence_summary(
         verdict_reasons=verdict.get("reasons") or [],
         dom_reasons=hdom.get("html_dom_anomaly_reasons") or [],
-        ai_block=ai,
         gaps=gaps,
         capture_cap=cap,
     )
@@ -616,7 +630,7 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
         st.markdown("- JavaScript-heavy pages may require stabilization time before reliable scraping.")
         st.markdown("- Rapid page swaps can evade screenshot or DOM capture.")
         st.markdown("- PhishStats provides phishing URLs only, so legitimate baselines must come from curated brand references.")
-        st.markdown("- AI adjudication is used for explanation and review, not as the sole source of truth.")
+        st.markdown("- Final verdict is deterministic evidence adjudication over structured signals.")
 
 
 def main() -> None:
@@ -643,7 +657,6 @@ def main() -> None:
     url = st.text_input("URL to analyze", placeholder="https://example.com")
     reinforcement = st.checkbox("Run reinforcement (Playwright / HTTP in container)", value=True)
     layer1_dns = st.checkbox("Layer-1 DNS lookups (slower)", value=False)
-    ai_adjudication = st.checkbox("Enable AI adjudication (borderline/disagreement only)", value=True)
 
     if st.button("Analyze", type="primary"):
         url = (url or "").strip()
@@ -652,7 +665,7 @@ def main() -> None:
             return
         with st.spinner("Analyzing…"):
             try:
-                row = _run_dashboard_subprocess(url, reinforcement, layer1_dns, ai_adjudication)
+                row = _run_dashboard_subprocess(url, reinforcement, layer1_dns)
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Analysis failed: {exc}")
                 logger.error(traceback.format_exc())

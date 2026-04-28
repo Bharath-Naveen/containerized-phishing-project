@@ -37,7 +37,7 @@ Auxiliary:
 
 - `eval_multi_seed.py`: multi-seed stability checks.
 - `fp_audit.py` / `phish_audit.py`: audit slices.
-- `ai_adjudication_audit.py`: evaluates bounded AI adjudication behavior.
+- `ai_adjudication_audit.py`: deterministic evidence adjudication audit report generator (historical filename retained).
 
 ## Artifacts
 

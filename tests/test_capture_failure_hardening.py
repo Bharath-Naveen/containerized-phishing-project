@@ -149,7 +149,6 @@ def test_build_dashboard_capture_failure_evidence_gap() -> None:
                 out, gaps = build_dashboard_analysis(
                     "https://evil-phish-login-verify.example/fake",
                     reinforcement=True,
-                    ai_adjudication=False,
                 )
     cap = (out.get("reinforcement") or {}).get("capture") or {}
     assert cap.get("capture_failure_suspicious") is True
@@ -196,7 +195,6 @@ def test_build_dashboard_click_probe_disabled_config() -> None:
                 out, _gaps = build_dashboard_analysis(
                     "https://example.com/",
                     reinforcement=True,
-                    ai_adjudication=False,
                 )
     cp = ((out.get("reinforcement") or {}).get("capture") or {}).get("click_probe") or {}
     assert cp.get("click_probe_skip_reason") == "disabled_by_config"
