@@ -1,275 +1,131 @@
-# Phishing Detection Platform (Team Share)
+# Containerized Phishing Detection Dashboard
 
-This repository provides a layered phishing detection system for URL triage and page-level reinforcement:
+Layered phishing detection dashboard combining ML triage and deterministic evidence review for explainable, deployment-ready decisions.
 
-- Layer 1: fast ML triage on URL/host features.
-- Layer 2: optional live capture + HTML/DOM + host/path reasoning.
-- Layer 3: deterministic Evidence Adjudication Layer (EAL) over structured evidence categories.
-- Layer 4: final explainable verdict with guardrails and evidence gaps.
+## Project Goal
 
-The project is optimized for team collaboration: active code is under `src/app_v1` and `src/pipeline`, deprecated screenshot-first workflows are preserved under `archive/legacy` and clearly labeled.
+Detect phishing reliably while reducing false positives on legitimate modern websites by combining:
 
-## Why Screenshot Comparison Was Deprecated
+- fast URL/domain ML scoring,
+- live browser evidence collection,
+- structural and behavior analysis,
+- deterministic Evidence Adjudication Layer (EAL).
 
-The original screenshot-comparison UX was useful for demos, but weak for production triage because it:
+The runtime path is deterministic. AI adjudication is removed/disabled.
 
-- required brittle visual matching/reference maintenance,
-- struggled with modern dynamic layouts and localization,
-- offered limited explainability versus structured signals.
+## Current Architecture
 
-The current architecture favors structured, auditable evidence (DOM/form/link/host/path) and deterministic evidence adjudication. Legacy screenshot code remains available in `archive/legacy` for reference.
+1. **Layer 1: ML + Model Agreement**
+   - Primary Layer-1 model trained on large URL/host feature data (~500k scale training setup).
+   - Optional witness models (`logistic_regression`, `random_forest`, `xgboost`, `lightgbm`) provide agreement/disagreement signals.
+   - Primary model remains authoritative for ML probability.
 
-## Current Layered Architecture
+2. **Layer 2: Live Capture (Playwright)**
+   - Final URL + redirect chain collection.
+   - Form target capture (same-domain vs cross-domain).
+   - TLS/browser security state (`https`, cert errors, insecure/mixed content indicators).
 
-See full details in `docs/ARCHITECTURE.md`.
+3. **Layer 3: HTML/DOM + Behavior Signals**
+   - DOM/form/link structure signals.
+   - Wrapper/interstitial, credential harvester, and suspicious-page patterns.
+   - JS/network behavior heuristics (including exfiltration suspicion).
 
-1. `src/pipeline`:
-   - data ingestion, cleaning, feature extraction, splits, training/evaluation, audits.
-2. `src/app_v1`:
-   - runtime URL analysis, capture, DOM anomaly extraction, host/path reasoning, deterministic evidence adjudication, Streamlit UI.
-3. final output:
-   - explainable JSON from `src/app_v1/analyze_dashboard.py`.
+4. **Brand/Trust Context**
+   - Brand-domain coherence (deterministic NLP-style matching).
+   - Official domain trust-prior (`data/official_domains.json`) used as a weak trust anchor, not a whitelist.
 
-## Quick Start
+5. **Evidence Adjudication Layer (EAL)**
+   - Deterministic phishing/legitimacy/ambiguity scoring.
+   - Hard blockers for high-risk corroborated patterns.
+   - Conservative conflict handling (`uncertain` when evidence disagrees).
 
-### Local
+## AI Status
+
+- AI/OpenAI adjudication is not used in deployment runtime.
+- No OpenAI key is required for dashboard/CLI operation.
+
+## Setup
+
+### Local Python run
 
 ```powershell
 $env:PYTHONPATH = "$PWD"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-pytest
 streamlit run src/app_v1/frontend.py
 ```
 
-### Docker (recommended for untrusted URLs)
+CLI one-off analysis:
+
+```powershell
+python -m src.app_v1.analyze_dashboard --url "https://example.com"
+```
+
+### Docker run
 
 ```bash
 docker compose build
 docker compose up
-# then open http://localhost:8501
 ```
 
-More container details: `DOCKER.md`.
+Then open [http://localhost:8501](http://localhost:8501).
 
-## Training Workflow
+## Example URLs to Validate Behavior
 
-Primary dataset setup: `docs/DATASET_SETUP.md`.
+- LinkedIn official profile/login (`linkedin.com`) -> `likely_legitimate` or `uncertain`
+- Virgin Atlantic (`virginatlantic.com`) -> `likely_legitimate` or `uncertain`
+- Coursera (`coursera.org`) -> `likely_legitimate` or `uncertain`
+- Suspicious Weebly/user-hosted sample -> `likely_phishing`
+- Vercel brand clone (`paypal-login.vercel.app`, `netflix-update-payment-details.vercel.app`) -> `likely_phishing`
 
-Typical run:
+## How to Interpret Verdicts
 
-```bash
-python -m src.pipeline.run_kaggle_pipeline
-```
-
-Useful variants:
-
-```bash
-python -m src.pipeline.run_kaggle_pipeline --sample-size 5000
-python -m src.pipeline.run_kaggle_pipeline --full
-```
-
-Pipeline overview: `docs/PIPELINE_OVERVIEW.md`.
-
-## Running the Frontend
-
-Main UI:
-
-```bash
-streamlit run src/app_v1/frontend.py
-```
-
-CLI JSON mode:
-
-```bash
-python -m src.app_v1.analyze_dashboard --url "https://example.com"
-```
-
-Frontend guide: `docs/FRONTEND_GUIDE.md`.
-
-## Optional Language Detection (fastText)
-
-The dashboard includes an optional fastText page-language enrichment used as a **contextual signal only**.  
-It is not a core phishing verdict driver and does not change model training or thresholds.
-
-Download the language ID model (`lid.176.ftz`) into `./models/`:
-
-```bash
-pip install fasttext
-python -m src.app_v1.utils.download_models --fasttext
-```
-
-Environment variable (optional):
-
-```bash
-export PHISH_FASTTEXT_LID_MODEL=/absolute/path/to/lid.176.ftz
-```
-
-Behavior:
-
-- If `PHISH_FASTTEXT_LID_MODEL` is set, that path is used.
-- If not set, the app falls back to `./models/lid.176.ftz`.
-- If no model is found (or `fasttext` is not installed), analysis continues normally and language detection is marked unavailable.
-
-## Legitimacy Rescue Layer
-
-The system includes a generalized legitimacy rescue guard (post-ML, pre-final-verdict) to reduce false positives when structural legitimacy evidence is strong and phishing blockers are absent.
-
-For deployment configuration, trusted-domain registry format, and operational safety notes, see:
-
-- `docs/DEPLOYMENT_NOTES.md`
-
-## Deployment Verdict Path
-
-Final verdicts are produced by a deterministic Evidence Adjudication Layer that accumulates phishing and legitimacy signals, requires corroboration across independent evidence sources, and preserves non-overridable hard blockers.
-
-External AI adjudication is removed from the deployment runtime path; no API key is required for normal dashboard or CLI operation.
-
-## Dashboard Sections (What They Mean)
-
-- **Verdict**: final label/confidence/combined score with reasons.
-- **Layer-1 ML**: URL/host classifier output and top linear signals. Optional witness models in `outputs/models/` (`logistic_regression`, `random_forest`, `xgboost`, `lightgbm`) add agreement signals only; the primary artifact (`layer1_primary.joblib`) stays authoritative for ML probability, and EAL uses consensus or disagreement as evidence—not a replacement verdict.
-- **Reinforcement**: live capture status + org-style risk.
-- **HTML Structure Signals**: compact DOM structure summary.
-- **HTML / DOM Anomaly Review**: mismatch/interstitial/harvester evidence.
-- **Host / Path reasoning**: host legitimacy and path-conformity assessment.
-- **Final Evidence Review**: deterministic evidence taxonomy + scoring + conservative decision rule.
-- **Evidence gaps**: known blind spots from failed/partial capture.
-
-## Strengths
-
-- Explainable multi-layer evidence (not ML-only).
-- Local-first parsing (raw full HTML is not sent to AI).
-- Strong phishing guardrails (credential capture/deceptive host patterns).
-- Bounded AI influence with auditable adjustments.
-- Container-friendly execution for safer URL analysis.
+- `likely_phishing`: corroborated high-risk phishing evidence.
+- `uncertain`: evidence conflict or insufficient corroboration; manual review recommended.
+- `likely_legitimate`: strong legitimacy evidence with no high-risk phishing blockers.
 
 ## Known Limitations
 
-- Layer-1 may still over-score some legitimate long-tail domains.
-- Live capture quality depends on network/captcha/bot defenses.
-- Heuristic layers can produce edge-case noise on unusual public pages.
-- External AI adjudication is removed from the deployment runtime path.
+- URL-based ML can over-alert on modern JS-heavy sites.
+- Live capture can be affected by anti-bot systems, geofencing, or headless blocking.
+- Official trust-prior is not a whitelist and does not auto-trust suspicious behavior.
+- `uncertain` is intentional for conflict cases where deterministic evidence disagrees.
 
-## Repository Structure
+## Deployment Notes
+
+- **Laptop/local run**: only users on the same machine (or LAN if allowed) can access the dashboard.
+- **Public access**: deploy to a hosted environment (VPS/cloud), e.g. AWS, GCP, Azure, Render, Fly.io, Railway, etc.
+- Expose port `8501` and secure access (HTTPS + auth/network controls) before sharing publicly.
+- Never store secrets in repo files or compose files.
+
+## Suggested Repo Layout (Deployment-Ready)
 
 ```text
 .
-├── src/
-│   ├── app_v1/                 # Live app runtime / dashboard / adjudication
-│   └── pipeline/               # Data + training + audits
-├── tests/                      # pytest coverage
-├── docs/                       # Team docs
-├── scripts/                    # Helper scripts
-├── archive/
-│   ├── legacy/                 # Deprecated screenshot-first code (kept, not used)
-│   └── sample_data/challenge/  # Optional sample URL lists
-├── data/                       # Local datasets (gitignored except placeholders)
-├── outputs/                    # Models/reports/artifacts (gitignored)
-├── captures/                   # Runtime captures (gitignored)
-└── logs/                       # Logs (gitignored)
+├── src/                      # Runtime + pipeline code
+├── tests/                    # Regression tests
+├── docs/                     # Design and operational docs
+├── data/
+│   ├── official_domains.json # curated trust-prior registry (kept)
+│   ├── raw/ interim/ processed/ (runtime/training data, gitignored)
+├── models/                   # optional demo artifacts
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
 ```
 
-## Documentation Index
+Generated runtime artifacts should remain untracked:
 
-- `docs/ARCHITECTURE.md`
-- `docs/FRONTEND_GUIDE.md`
-- `docs/PIPELINE_OVERVIEW.md`
-- `docs/CHANGELOG_PROJECT_EVOLUTION.md`
-- `docs/TESTING.md`
-- `docs/DATASET_SETUP.md`
+- `captures/`
+- `outputs/fresh_retrain_runs/`
+- `outputs/reports/` debug artifacts
+- `data/processed/`
+- temporary CSV/JSONL exports
 
-## Security and Sharing Notes
+## Useful Commands
 
-- Never commit `.env`, API keys, raw datasets, captures, or outputs.
-- Review `.gitignore` before pushing.
-- Legacy code in `archive/legacy` is reference-only and deprecated.
-
----
-
-## TL;DR (Simple Explanation)
-
-This project is a phishing detection system that analyzes a URL and determines whether it is:
-
-- likely legitimate  
-- uncertain  
-- likely phishing  
-
-Instead of relying only on a machine learning model, the system combines multiple layers of analysis to make a more reliable and explainable decision.
-
----
-
-## How the System Works (Simplified)
-
-The system evaluates a website in several steps:
-
-1. **URL-Based ML (Layer 1)**  
-   - A machine learning model looks only at the URL and domain features  
-   - Produces a fast initial probability  
-   - This is only a first signal and can be wrong  
-
-2. **Live Page Analysis (Reinforcement Layer)**  
-   - The system loads the page safely  
-   - Checks for basic behavioral and branding signals  
-
-3. **HTML / DOM Analysis**  
-   - Examines page structure  
-   - Looks for:
-     - login forms  
-     - suspicious redirects  
-     - fake wrapper/interstitial pages  
-
-4. **Host and Path Reasoning**  
-   - Evaluates the domain and URL path  
-   - Determines if the URL structure is normal or suspicious  
-
-5. **Evidence Adjudication Layer (Deterministic)**  
-   - Accumulates phishing and legitimacy evidence categories  
-   - Requires corroboration across independent evidence sources  
-   - Preserves non-overridable hard blockers  
-
-6. **Final Safety Guardrail**  
-   - If the page shows **no phishing behavior** (no credential capture, no impersonation, no deceptive redirects),  
-     the system forces a **likely legitimate** decision  
-   - This prevents false positives from the ML model  
-
----
-
-## How to Interpret the Dashboard
-
-When you analyze a URL in the frontend, each section represents a part of the decision:
-
-- **Verdict**  
-  Final classification, confidence level, and combined score  
-
-- **Layer-1 ML**  
-  The model’s prediction based only on the URL  
-
-- **Reinforcement**  
-  Results from loading and observing the live page  
-
-- **HTML Structure Signals**  
-  Summary of page structure (forms, links, layout patterns)  
-
-- **DOM Anomaly Review**  
-  Detection of suspicious patterns like fake wrappers or mismatched links  
-
-- **Host / Path Reasoning**  
-  Whether the domain and URL path look legitimate or suspicious  
-
-- **Final Evidence Review**  
-  Deterministic scoring over structured evidence categories  
-
-- **Evidence Gaps**  
-  Missing signals due to capture issues or blocked content  
-
----
-
-## Key Design Idea
-
-The system is intentionally designed so that:
-
-> The final decision is based on **evidence**, not just the ML model.
-
-This reduces false positives on legitimate websites while still detecting phishing pages that show real malicious behavior.
+```bash
+# targeted regression set used for deployment checks
+pytest tests/test_evidence_adjudication_layer.py tests/test_hosting_domain_trust_layer.py tests/test_ml_model_agreement.py tests/test_behavior_signals.py -q
+```

@@ -23,8 +23,6 @@ services:
       PHISH_OUTPUTS_DIR: /app/outputs
       PHISH_LOGS_DIR: /app/logs
       PHISH_OUTPUT_DIR: /data/captures
-      # Set in .env next to this file or export before `docker compose up`
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - ./captures:/data/captures
       - ./data:/app/data
@@ -48,7 +46,6 @@ services:
       PHISH_DATA_DIR: /app/data
       PHISH_OUTPUTS_DIR: /app/outputs
       PHISH_LOGS_DIR: /app/logs
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - ./data:/app/data
       - ./outputs:/app/outputs

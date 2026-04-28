@@ -54,6 +54,16 @@ data/processed/*
 outputs/
 logs/
 captures/
+outputs/reports/debug*/
+outputs/reports/*debug*.json
+
+# --- Temporary exports ---
+tmp/
+temp/
+*.tmp.csv
+*_tmp.csv
+*.tmp.jsonl
+*_tmp.jsonl
 
 # --- IDE / OS ---
 .idea/

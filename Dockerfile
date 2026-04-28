@@ -19,9 +19,6 @@ ENV PHISH_LOGS_DIR=/app/logs
 # Captures / HTML / screenshots (override in compose with volume)
 ENV PHISH_OUTPUT_DIR=/data/captures
 
-# OpenAI (optional) — pass at runtime: -e OPENAI_API_KEY=…
-# ENV OPENAI_API_KEY=
-
 EXPOSE 8501
 
 # Default: overridden by docker-compose
