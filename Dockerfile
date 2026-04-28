@@ -21,5 +21,5 @@ ENV PHISH_OUTPUT_DIR=/data/captures
 
 EXPOSE 8501
 
-# Default: overridden by docker-compose
-CMD ["streamlit", "run", "src/app_v1/frontend.py", "--server.address=0.0.0.0", "--server.port=8501"]
+# Default command supports cloud PORT env with local fallback.
+CMD ["sh", "-c", "streamlit run src/app_v1/frontend.py --server.address=0.0.0.0 --server.port=${PORT:-8501}"]
