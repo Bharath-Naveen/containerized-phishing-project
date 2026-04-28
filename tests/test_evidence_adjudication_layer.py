@@ -507,6 +507,9 @@ def test_official_authwall_wrapper_not_hard_blocker_linkedin_case() -> None:
     assert out["verdict_3way"] in {"likely_legitimate", "uncertain"}
     assert out["verdict_3way"] != "likely_phishing"
     assert "wrapper_or_interstitial_redirect_pattern" not in (out.get("evidence_hard_blockers") or [])
+    assert "strong_brand_domain_mismatch" not in (out.get("evidence_phishing_signals") or [])
+    assert "auth_context_on_non_official_domain" not in (out.get("evidence_phishing_signals") or [])
+    assert "first_party_auth_flow_consistency" in (out.get("evidence_legitimacy_signals") or [])
 
 
 def test_official_authwall_wrapper_is_ambiguity_not_hard_blocker() -> None:
@@ -537,6 +540,43 @@ def test_official_authwall_wrapper_is_ambiguity_not_hard_blocker() -> None:
     )
     assert "wrapper_or_interstitial_redirect_pattern" not in (out.get("evidence_hard_blockers") or [])
     assert "official_authwall_wrapper_pattern" in (out.get("evidence_ambiguity_signals") or [])
+
+
+def test_linkedin_official_authwall_oauth_mentions_do_not_trigger_brand_mismatch() -> None:
+    layer2, _, _, _ = _enrich_capture_and_html_signals(
+        input_url="https://www.linkedin.com/authwall",
+        capture_json={
+            "final_url": "https://www.linkedin.com/authwall",
+            "title": "LinkedIn Login",
+            "visible_text_sample": "Sign in with Google or Apple",
+            "interaction": {},
+        },
+        soup=None,
+        html_structure_summary={
+            "brand_terms_found_in_text": ["google", "apple"],
+            "form_count": 1,
+            "password_input_count": 1,
+            "email_input_count": 1,
+            "phone_input_count": 0,
+            "visible_text_snippet": "Continue with Google, Apple",
+            "title": "LinkedIn Login",
+            "h1_text": "Sign in",
+            "nav_link_count": 4,
+            "footer_link_count": 2,
+            "has_support_help_links": True,
+        },
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "wrapper_page_pattern": True,
+            "interstitial_or_preview_pattern": True,
+            "page_family": "auth_login_recovery",
+            "official_platform_context": "true",
+        },
+    )
+    assert layer2.get("brand_domain_mismatch") is False
+    assert layer2.get("brand_domain_mismatch_strength") in {"none", "weak"}
 
 
 def test_official_content_wrapper_demoted_to_ambiguity_coursera_like() -> None:
@@ -702,7 +742,8 @@ def test_high_ml_clean_coherent_brand_page_caps_to_uncertain() -> None:
         hosting_trust={"hosting_trust_status": "hosting_trust_verified"},
         legitimacy_bundle={},
     )
-    assert out["verdict_3way"] == "uncertain"
+    assert out["verdict_3way"] in {"uncertain", "likely_legitimate"}
+    assert out["verdict_3way"] != "likely_phishing"
     assert "brand_domain_coherence" in (out.get("evidence_legitimacy_signals") or [])
     assert "ml_brand_coherence_disagreement" in (out.get("evidence_ambiguity_signals") or [])
 
@@ -1758,6 +1799,81 @@ def test_official_netflix_gets_official_domain_trust_prior() -> None:
     )
     assert out["verdict_3way"] in {"uncertain", "likely_legitimate"}
     assert "official_domain_trust_prior" in (out.get("evidence_legitimacy_signals") or [])
+
+
+def test_virgin_atlantic_gets_official_domain_trust_prior_and_not_phishing_when_clean() -> None:
+    out = _apply_evidence_adjudication_layer(
+        _base_verdict(0.58),
+        ml={"phish_proba": 0.91, "phish_proba_calibrated": 0.91, "model_agreement": {"ml_consensus": "strong_phishing"}},
+        layer2_capture={
+            "input_registered_domain": "virginatlantic.com",
+            "final_registered_domain": "virginatlantic.com",
+            "final_url": "https://www.virginatlantic.com/en-US",
+            "brand_domain_mismatch": False,
+            "brand_domain_mismatch_strength": "none",
+            "brand_domain_coherence_match": True,
+            "brand_domain_coherence_score": 0.8,
+            "password_input_external_action": False,
+            "final_domain_is_free_hosting": False,
+        },
+        html_structure_summary={"password_input_count": 0, "email_input_count": 0, "form_count": 0, "nav_link_count": 8, "footer_link_count": 5, "has_support_help_links": True},
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "wrapper_page_pattern": False,
+            "interstitial_or_preview_pattern": True,
+            "content_rich_profile": True,
+            "page_family": "generic_landing",
+        },
+        html_structure_risk=0.10,
+        html_dom_risk=0.10,
+        behavior_signals={"network_exfiltration_suspected": False, "behavior_analysis_unavailable": False},
+        host_path_reasoning={"host_identity_class": "known_platform_official", "host_legitimacy_confidence": "high"},
+        platform_context={"platform_context_type": "official_platform_domain"},
+        trust_blockers=[],
+        hosting_trust={"hosting_trust_status": "hosting_trust_verified"},
+        legitimacy_bundle={},
+    )
+    assert "official_domain_trust_prior" in (out.get("evidence_legitimacy_signals") or [])
+    assert out["verdict_3way"] in {"uncertain", "likely_legitimate"}
+    assert out["verdict_3way"] != "likely_phishing"
+
+
+def test_virgin_atlantic_strong_ml_overconfidence_relaxes_to_likely_legitimate() -> None:
+    out = _apply_evidence_adjudication_layer(
+        _base_verdict(0.60),
+        ml={"phish_proba": 0.95, "phish_proba_calibrated": 0.95, "model_agreement": {"ml_consensus": "strong_phishing"}},
+        layer2_capture={
+            "input_registered_domain": "virginatlantic.com",
+            "final_registered_domain": "virginatlantic.com",
+            "final_url": "https://www.virginatlantic.com/en-US",
+            "brand_domain_mismatch": False,
+            "brand_domain_mismatch_strength": "none",
+            "brand_domain_coherence_match": True,
+            "brand_domain_coherence_score": 0.86,
+            "password_input_external_action": False,
+            "final_domain_is_free_hosting": False,
+        },
+        html_structure_summary={"password_input_count": 0, "email_input_count": 0, "form_count": 0, "nav_link_count": 9, "footer_link_count": 6, "has_support_help_links": True},
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "content_rich_profile": True,
+            "page_family": "generic_landing",
+        },
+        html_structure_risk=0.08,
+        html_dom_risk=0.08,
+        behavior_signals={"network_exfiltration_suspected": False, "behavior_analysis_unavailable": False},
+        host_path_reasoning={"host_identity_class": "known_platform_official", "host_legitimacy_confidence": "high"},
+        platform_context={"platform_context_type": "official_platform_domain"},
+        trust_blockers=[],
+        hosting_trust={"hosting_trust_status": "hosting_trust_verified"},
+        legitimacy_bundle={},
+    )
+    assert out["verdict_3way"] == "likely_legitimate"
+    assert "ml_overconfidence_relaxed_due_to_strong_legitimacy" in (out.get("evidence_ambiguity_signals") or [])
 
 
 def test_vercel_clone_does_not_get_official_domain_trust_prior() -> None:

@@ -855,6 +855,18 @@ def _enrich_capture_and_html_signals(
             or brand_in_auth_payment_context
         )
     )
+    official_auth_same_domain_candidate = bool(
+        input_reg
+        and final_reg
+        and input_reg == final_reg
+        and official_platform_candidate
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and not bool(password_input_external_action)
+        and not bool(final_domain_is_free_hosting)
+    )
+    if official_auth_same_domain_candidate and not brand_in_domain_or_path_context and not brand_in_form_action_context:
+        # OAuth/provider mentions on first-party official authwalls should not create host-brand mismatch.
+        brand_domain_mismatch = False
     suppression_same_domain_content_rich = bool(
         input_reg
         and final_reg
@@ -1676,12 +1688,29 @@ def _compute_phishing_blockers(
     )
     weak_or_no_brand_mismatch = mismatch_strength in {"none", "weak"} or not bool(cap.get("brand_domain_mismatch"))
     brand_domain_coherence_match = bool(cap.get("brand_domain_coherence_match"))
+    official_domain_family = bool(legitimacy_bundle.get("official_domain_family"))
+    official_like_host = bool(host_on_official_brand_apex(_hostname(str(cap.get("final_url") or "")))) or str(hp.get("host_identity_class") or "") in {
+        "official_brand_auth",
+        "official_brand_apex",
+        "official_brand_host",
+    }
     coherent_brand_host_identity_candidate = bool(
         brand_domain_coherence_match
         and same_reg_domain
         and weak_or_no_brand_mismatch
         and not bool(cap.get("final_domain_is_free_hosting"))
         and platform_context_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+    )
+    official_auth_same_domain_safe = bool(
+        same_reg_domain
+        and (official_like_host or official_domain_family)
+        and int(dom.get("form_action_external_domain_count") or 0) == 0
+        and not bool(cap.get("password_input_external_action"))
+        and not bool(cap.get("network_exfiltration_suspected"))
+        and not bool(cap.get("security_block_page_detected"))
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and platform_context_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and (brand_domain_coherence_match or official_domain_family)
     )
     rich_nav_footer_support = bool(
         int(cap.get("nav_link_count") or 0) >= 4
@@ -1704,7 +1733,7 @@ def _compute_phishing_blockers(
     blockers: List[str] = []
     if int(dom.get("form_action_external_domain_count") or 0) > 0 or bool(legitimacy_bundle.get("suspicious_form_action_cross_origin")):
         blockers.append("cross_domain_form_action")
-    if strong_brand_mismatch and (not suppress_oauth_brand_mismatch):
+    if strong_brand_mismatch and (not suppress_oauth_brand_mismatch) and (not official_auth_same_domain_safe):
         blockers.append("brand_domain_mismatch")
     if not bool(legitimacy_bundle.get("no_free_hosting_signal", True)) or bool(cap.get("final_domain_is_free_hosting")):
         blockers.append("free_hosting_impersonation")
@@ -1716,7 +1745,7 @@ def _compute_phishing_blockers(
         blockers.append("cloud_hosted_brand_impersonation")
     if bool(dom.get("suspicious_credential_collection_pattern")) or bool(dom.get("login_harvester_pattern")):
         blockers.append("sparse_credential_harvester_pattern")
-    if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")) and not clean_official_content_wrapper_context:
+    if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")) and not clean_official_content_wrapper_context and not official_auth_same_domain_safe:
         blockers.append("wrapper_or_interstitial_redirect_pattern")
     if int(dom.get("anchor_strong_mismatch_count") or 0) > 0:
         blockers.append("strong_anchor_domain_mismatch")
@@ -2514,8 +2543,27 @@ def _apply_evidence_adjudication_layer(
         and ml_not_high_or_strong_legit
         and host_legit_conf == "high"
     )
+    official_domain_family = bool(bundle.get("official_domain_family"))
+    official_auth_same_domain_safe = bool(
+        same_reg_domain
+        and (
+            host_identity in {"official_brand_auth", "official_brand_apex", "official_brand_host"}
+            or official_like_host
+            or official_domain_family
+        )
+        and same_domain_forms
+        and no_password_external_action
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+        and (
+            bool(cap.get("brand_domain_coherence_match"))
+            or official_domain_family
+        )
+    )
     if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
-        if wrapper_official_authwall_safe or wrapper_clean_official_or_same_domain_safe:
+        if wrapper_official_authwall_safe or wrapper_clean_official_or_same_domain_safe or official_auth_same_domain_safe:
             # Official first-party authwall/login wrappers are ambiguity context, not hard blockers.
             pass
         else:
@@ -2558,6 +2606,8 @@ def _apply_evidence_adjudication_layer(
     if isinstance(spr, (int, float)) and float(spr) > 0.4:
         amb_signals.append("high_model_probability_spread")
     if wrapper_official_authwall_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
+        amb_signals.append("official_authwall_wrapper_pattern")
+    if official_auth_same_domain_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
         amb_signals.append("official_authwall_wrapper_pattern")
     if wrapper_clean_official_or_same_domain_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
         amb_signals.append("official_content_wrapper_pattern")
@@ -2623,6 +2673,8 @@ def _apply_evidence_adjudication_layer(
             phish_score += 0.30
             phish_signals.append("suspicious_user_hosted_subdomain")
     strong_brand_mismatch = _is_strong_brand_domain_mismatch(cap, dom)
+    if official_auth_same_domain_safe:
+        strong_brand_mismatch = False
     if strong_brand_mismatch and pctx_type in {"official_platform_domain", "official_platform_login"}:
         # On official platform domains, only trust/auth/host-path impersonation should remain strong.
         trust_or_host_impersonation = bool(
@@ -2680,10 +2732,14 @@ def _apply_evidence_adjudication_layer(
     if bool(cap.get("final_domain_is_free_hosting")) and bool(_is_strong_brand_domain_mismatch(cap, dom)):
         phish_score += 0.25
         phish_signals.append("free_hosted_brand_impersonation")
-    if str(dom.get("page_family") or "") == "auth_login_recovery" and str(pctx.get("platform_context_type") or "") not in {
+    if (
+        str(dom.get("page_family") or "") == "auth_login_recovery"
+        and (not official_auth_same_domain_safe)
+        and str(pctx.get("platform_context_type") or "") not in {
         "official_platform_domain",
         "official_platform_login",
-    }:
+        }
+    ):
         phish_score += 0.20
         phish_signals.append("auth_context_on_non_official_domain")
 
@@ -2720,6 +2776,9 @@ def _apply_evidence_adjudication_layer(
         legit_score += 0.20
         legit_signals.append("platform_hosted_brand_consistency")
     if first_party_auth_flow_cap:
+        legit_score += 0.18
+        legit_signals.append("first_party_auth_flow_consistency")
+    if official_auth_same_domain_safe and "first_party_auth_flow_consistency" not in legit_signals:
         legit_score += 0.18
         legit_signals.append("first_party_auth_flow_consistency")
     if coherence_clean_context:
@@ -2870,6 +2929,22 @@ def _apply_evidence_adjudication_layer(
     if ml_brand_coherence_disagreement:
         amb_signals.append("ml_brand_coherence_disagreement")
     auth_page_like = str(dom.get("page_family") or "") == "auth_login_recovery" or first_party_login_like
+    ml_overconfidence_relaxed_due_to_strong_legitimacy = bool(
+        official_domain_prior_candidate
+        and coherence_clean_context
+        and same_registrable_domain
+        and no_credential_capture
+        and same_domain_or_platform_forms
+        and not bool(cap.get("password_input_external_action"))
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and not hard_blockers
+        and not auth_page_like
+        and cons == "strong_phishing"
+        and legit_score >= 0.90
+    )
+    if ml_overconfidence_relaxed_due_to_strong_legitimacy:
+        amb_signals.append("ml_overconfidence_relaxed_due_to_strong_legitimacy")
     official_domain_clean_promotion = bool(
         official_domain_prior_candidate
         and (cons == "strong_legitimate" or p < 0.50 or no_phishing_guard)
@@ -2889,6 +2964,8 @@ def _apply_evidence_adjudication_layer(
     elif first_party_auth_flow_cap:
         # First-party auth flow on same registrable domain with no exfiltration/impersonation: keep high-ML disagreement conservative.
         final_label = "uncertain"
+    elif ml_overconfidence_relaxed_due_to_strong_legitimacy:
+        final_label = "likely_legitimate"
     elif ml_brand_coherence_disagreement:
         # Strong title/header-brand to host coherence with clean live evidence should cap high-ML disagreement.
         final_label = "uncertain"
