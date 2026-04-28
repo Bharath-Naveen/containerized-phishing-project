@@ -645,6 +645,8 @@ def _playwright_full_capture(
                         page = context.new_page()
                         nav_chain: list[str] = []
                         seen_nav: set[str] = set()
+                        network_requests: List[str] = []
+                        seen_requests: set[str] = set()
 
                         def _track_nav(frame: Any) -> None:
                             try:
@@ -658,6 +660,19 @@ def _playwright_full_capture(
                                 return
 
                         page.on("framenavigated", _track_nav)
+                        def _track_request(req: Any) -> None:
+                            try:
+                                u = str(req.url or "")
+                            except Exception:
+                                u = ""
+                            if not u:
+                                return
+                            if u in seen_requests:
+                                return
+                            seen_requests.add(u)
+                            if len(network_requests) < 400:
+                                network_requests.append(u)
+                        page.on("request", _track_request)
                         if stealth:
                             page.add_init_script(_STEALTH_INIT_SCRIPT)
 
@@ -864,6 +879,7 @@ def _playwright_full_capture(
                         capture_block_reason=None,
                         capture_block_evidence=None,
                         first_failed_capture_step=first_fail[0],
+                            network_request_urls=network_requests,
                     )
                 finally:
                     if context is not None:
@@ -960,6 +976,7 @@ def capture_url(
             capture_block_reason=None,
             capture_block_evidence=None,
             first_failed_capture_step=None,
+            network_request_urls=[],
         )
 
     # Strategy A — stealth (headed, randomized UA, automation flags reduced).
@@ -1048,6 +1065,7 @@ def capture_url(
                 else "Playwright capture was unavailable; direct HTTP retrieval succeeded."
             ),
             first_failed_capture_step=None,
+            network_request_urls=[],
         )
     except Exception as httpe:  # noqa: BLE001
         logger.exception("capture: HTTP fallback failed: %s", httpe)
@@ -1087,4 +1105,5 @@ def capture_url(
             capture_block_reason=combined_reason,
             capture_block_evidence=combined_evidence,
             first_failed_capture_step=None,
+            network_request_urls=[],
         )

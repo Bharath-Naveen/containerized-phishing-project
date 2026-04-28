@@ -186,6 +186,7 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
     hdom = row.get("html_dom_anomaly") or {}
     hpr = row.get("host_path_reasoning") or {}
     html_enrich = row.get("html_dom_enrichment") or {}
+    behavior = row.get("behavior_signals") or {}
     enrichment_signals = row.get("enrichment_signals") or {}
     verdict = row.get("verdict") or {}
     gaps = row.get("evidence_gaps") or []
@@ -583,7 +584,15 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
         with c3:
             render_metric_card("Path Fit", str(hpr.get("path_fit_assessment") or "N/A").replace("_", " ").title())
     with st.expander("Layer 3 raw HTML/DOM/host-path evidence"):
-        st.write({"html_structure": htmls, "html_dom_anomaly": hdom, "html_dom_enrichment": html_enrich, "host_path_reasoning": hpr})
+        st.write(
+            {
+                "html_structure": htmls,
+                "html_dom_anomaly": hdom,
+                "html_dom_enrichment": html_enrich,
+                "host_path_reasoning": hpr,
+                "behavior_signals": behavior,
+            }
+        )
 
     # Final Evidence Review (deterministic)
     render_layer_section(
@@ -605,6 +614,23 @@ def _show_dashboard(row: Dict[str, Any]) -> None:
         st.markdown("**Top Evidence Reasons**")
         for r in (verdict.get("evidence_adjudication_reasons") or [])[:6]:
             st.markdown(f"- {r}")
+    if behavior:
+        with st.expander("Behavior Signals (JS / Network)"):
+            st.write(
+                {
+                    "js_obfuscation_score": behavior.get("js_obfuscation_score"),
+                    "js_obfuscation_signals": behavior.get("js_obfuscation_signals"),
+                    "js_dynamic_form_injection_detected": behavior.get("js_dynamic_form_injection_detected"),
+                    "js_anti_debugging_detected": behavior.get("js_anti_debugging_detected"),
+                    "js_suspicious_fetch_domains": behavior.get("js_suspicious_fetch_domains"),
+                    "js_suspicious_redirect_domains": behavior.get("js_suspicious_redirect_domains"),
+                    "network_request_domain_count": behavior.get("network_request_domain_count"),
+                    "network_common_benign_domains": behavior.get("network_common_benign_domains"),
+                    "network_unrelated_domains": behavior.get("network_unrelated_domains"),
+                    "network_exfiltration_suspected": behavior.get("network_exfiltration_suspected"),
+                    "network_exfiltration_reasons": behavior.get("network_exfiltration_reasons"),
+                }
+            )
 
     # Evidence adjudication summary
     render_evidence_summary(

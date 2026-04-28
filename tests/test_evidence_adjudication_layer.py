@@ -515,3 +515,115 @@ def test_official_google_and_amazon_pages_remain_likely_legitimate() -> None:
         )
         assert out["verdict_3way"] in {"likely_legitimate", "uncertain"}
         assert out["verdict_3way"] != "likely_phishing"
+
+
+def test_lionic_block_page_with_strong_ml_consensus_and_brand_mismatch_is_likely_phishing() -> None:
+    out = _apply_evidence_adjudication_layer(
+        _base_verdict(0.5),
+        ml={"phish_proba": 0.62, "phish_proba_calibrated": 0.62, "model_agreement": {"ml_consensus": "strong_phishing"}},
+        layer2_capture={
+            "input_registered_domain": "paypal-cardpaysecurity.netlify.app",
+            "final_registered_domain": "lionic.com",
+            "final_url": "https://block.cloud.lionic.com/blockpage/malicious.html",
+            "brand_domain_mismatch": True,
+            "brand_domain_mismatch_strength": "strong",
+            "security_block_page_detected": True,
+            "security_block_page_vendor": "lionic",
+            "security_block_page_reasons": ["block.cloud.lionic.com", "/blockpage/malicious.html"],
+        },
+        html_structure_summary={"password_input_count": 0, "form_count": 0},
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "content_rich_profile": True,
+            "page_family": "generic_landing",
+        },
+        html_structure_risk=0.0,
+        html_dom_risk=0.0,
+        host_path_reasoning={"host_identity_class": "suspicious_host_pattern", "host_legitimacy_confidence": "low"},
+        platform_context={"platform_context_type": "unknown"},
+        trust_blockers=[],
+        hosting_trust={},
+        legitimacy_bundle={},
+    )
+    assert out["verdict_3way"] == "likely_phishing"
+    ps = out.get("evidence_phishing_signals") or []
+    assert "ml_consensus_strong_phishing" in ps
+    assert "strong_brand_domain_mismatch" in ps
+    assert "security_vendor_blocked_as_malicious" in ps
+    assert "no_credential_capture" not in (out.get("evidence_legitimacy_signals") or [])
+    assert "no_cross_domain_forms" not in (out.get("evidence_legitimacy_signals") or [])
+    assert "content_rich_page" not in (out.get("evidence_legitimacy_signals") or [])
+    assert "low_html_dom_risk" not in (out.get("evidence_legitimacy_signals") or [])
+
+
+def test_lionic_block_page_with_high_ml_not_legitimate() -> None:
+    out = _apply_evidence_adjudication_layer(
+        _base_verdict(0.5),
+        ml={"phish_proba": 0.90, "phish_proba_calibrated": 0.90, "model_agreement": {"ml_consensus": "split"}},
+        layer2_capture={
+            "input_registered_domain": "unknown-target.example",
+            "final_registered_domain": "lionic.com",
+            "final_url": "https://block.cloud.lionic.com/blockpage/malicious.html",
+            "brand_domain_mismatch": False,
+            "security_block_page_detected": True,
+            "security_block_page_vendor": "lionic",
+            "security_block_page_reasons": ["this page has been blocked"],
+        },
+        html_structure_summary={"password_input_count": 0, "form_count": 0},
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "content_rich_profile": True,
+            "page_family": "generic_landing",
+        },
+        html_structure_risk=0.0,
+        html_dom_risk=0.0,
+        host_path_reasoning={},
+        platform_context={"platform_context_type": "unknown"},
+        trust_blockers=[],
+        hosting_trust={},
+        legitimacy_bundle={},
+    )
+    assert out["verdict_3way"] in {"likely_phishing", "uncertain"}
+    assert out["verdict_3way"] != "likely_legitimate"
+    assert "security_block_page_observed" in (out.get("evidence_ambiguity_signals") or [])
+
+
+def test_block_page_suppresses_absence_based_legitimacy_signals() -> None:
+    out = _apply_evidence_adjudication_layer(
+        _base_verdict(0.45),
+        ml={"phish_proba": 0.52, "phish_proba_calibrated": 0.52, "model_agreement": {"ml_consensus": "split"}},
+        layer2_capture={
+            "input_registered_domain": "leessolar.example",
+            "final_registered_domain": "lionic.com",
+            "final_url": "https://block.cloud.lionic.com/blockpage/malicious.html",
+            "brand_domain_mismatch": True,
+            "brand_domain_mismatch_strength": "strong",
+            "security_block_page_detected": True,
+            "security_block_page_vendor": "lionic",
+            "security_block_page_reasons": ["might steal your confidential information"],
+        },
+        html_structure_summary={"password_input_count": 0, "form_count": 0},
+        html_dom_summary={
+            "form_action_external_domain_count": 0,
+            "suspicious_credential_collection_pattern": False,
+            "login_harvester_pattern": False,
+            "content_rich_profile": True,
+            "page_family": "generic_landing",
+        },
+        html_structure_risk=0.0,
+        html_dom_risk=0.0,
+        host_path_reasoning={},
+        platform_context={"platform_context_type": "unknown"},
+        trust_blockers=[],
+        hosting_trust={},
+        legitimacy_bundle={},
+    )
+    ls = out.get("evidence_legitimacy_signals") or []
+    assert "no_credential_capture" not in ls
+    assert "no_cross_domain_forms" not in ls
+    assert "content_rich_page" not in ls
+    assert "low_html_dom_risk" not in ls

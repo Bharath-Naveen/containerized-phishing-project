@@ -25,6 +25,7 @@ from src.pipeline.paths import analysis_dir, ensure_layout
 from src.pipeline.safe_url import safe_hostname
 
 from .capture import capture_url
+from .behavior_signals import extract_behavior_signals
 from .config import PipelineConfig
 from .html_dom_anomaly_signals import extract_html_dom_anomaly_signals
 from .html_structure_signals import extract_html_structure_signals
@@ -78,6 +79,16 @@ _PLATFORM_DOMAIN_REGISTRY_CACHE: Optional[List[Dict[str, Any]]] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH: Optional[str] = None
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _IMPERSONATION_BRAND_TOKENS = set(BRAND_TOKENS) | {"handshake"}
+_SECURITY_BLOCK_VENDOR_PATTERNS: Dict[str, Tuple[str, ...]] = {
+    "lionic": (
+        "block.cloud.lionic.com",
+        "/blockpage/malicious.html",
+        "warning: visiting this site may harm your device",
+        "this page has been blocked",
+        "might steal your confidential information",
+        "security consideration",
+    ),
+}
 
 
 def _load_fasttext_language_model() -> Any:
@@ -101,6 +112,27 @@ def _load_fasttext_language_model() -> Any:
         _FASTTEXT_MODEL_ERROR = f"fasttext_model_load_error:{type(exc).__name__}"
         return None
     return _FASTTEXT_MODEL_CACHE
+
+
+def _detect_security_block_page(capture_json: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    cj = capture_json or {}
+    final_url = str(cj.get("final_url") or "").lower()
+    title = str(cj.get("title") or "").lower()
+    visible = str(cj.get("visible_text") or cj.get("visible_text_sample") or "").lower()
+    blob = "\n".join(x for x in (final_url, title, visible) if x)
+    for vendor, pats in _SECURITY_BLOCK_VENDOR_PATTERNS.items():
+        matched = [p for p in pats if p in blob]
+        if matched:
+            return {
+                "security_block_page_detected": True,
+                "security_block_page_vendor": vendor,
+                "security_block_page_reasons": matched,
+            }
+    return {
+        "security_block_page_detected": False,
+        "security_block_page_vendor": None,
+        "security_block_page_reasons": [],
+    }
 
 
 def _fasttext_language_enrichment(capture_json: Optional[Dict[str, Any]], soup: Any) -> Dict[str, Any]:
@@ -256,6 +288,7 @@ def _classify_platform_host_context(
     final_url = str(cap.get("final_url") or "")
     final_host = _hostname(final_url)
     final_reg = str(cap.get("final_registered_domain") or "").lower()
+    security_block_page_detected = bool(cap.get("security_block_page_detected"))
     path_l = (urlparse(final_url).path or "").lower() if final_url else ""
     text = f"{str(cap.get('title') or '').lower()}\n{str(cap.get('visible_text_sample') or '').lower()}"
     rows = _load_platform_domain_registry(getattr(cfg, "platform_domains_csv_path", ""))
@@ -453,6 +486,7 @@ def _enrich_capture_and_html_signals(
 ) -> Tuple[Dict[str, Any], Dict[str, Any], List[str], List[str]]:
     """Return (layer2_enrichment, layer3_enrichment, strong_signals, weak_signals)."""
     cj = capture_json or {}
+    security_block = _detect_security_block_page(cj)
     final_url = str(cj.get("final_url") or input_url or "")
     input_reg = _reg_domain(input_url)
     final_reg = _reg_domain(final_url)
@@ -566,6 +600,9 @@ def _enrich_capture_and_html_signals(
         "excessive_hyphen_count": excessive_hyphen_count,
         "brand_in_subdomain_or_path_but_not_registered_domain": brand_in_subdomain_or_path_but_not_registered_domain,
         "weak_signal_note": "URL anomalies are contextual/weak by themselves.",
+        "security_block_page_detected": bool(security_block.get("security_block_page_detected")),
+        "security_block_page_vendor": security_block.get("security_block_page_vendor"),
+        "security_block_page_reasons": list(security_block.get("security_block_page_reasons") or []),
     }
     click_meta = ((cj.get("interaction") or {}) if isinstance(cj.get("interaction"), dict) else {})
     layer2["click_probe"] = {
@@ -1892,6 +1929,7 @@ def _apply_evidence_adjudication_layer(
     html_structure_risk: Optional[float],
     html_dom_risk: Optional[float],
     html_dom_enrichment: Optional[Dict[str, Any]] = None,
+    behavior_signals: Optional[Dict[str, Any]] = None,
     host_path_reasoning: Optional[Dict[str, Any]],
     platform_context: Optional[Dict[str, Any]],
     trust_blockers: List[str],
@@ -1904,6 +1942,7 @@ def _apply_evidence_adjudication_layer(
     hs = html_structure_summary or {}
     dom = html_dom_summary or {}
     enrich = html_dom_enrichment or {}
+    beh = behavior_signals or {}
     hp = host_path_reasoning or {}
     pctx = platform_context or {}
     trust = hosting_trust or {}
@@ -1912,6 +1951,7 @@ def _apply_evidence_adjudication_layer(
     final_url = str(cap.get("final_url") or "")
     final_host = _hostname(final_url)
     final_reg = str(cap.get("final_registered_domain") or "").lower()
+    security_block_page_detected = bool(cap.get("security_block_page_detected"))
     host_identity = str(hp.get("host_identity_class") or "")
     host_legit_conf = str(hp.get("host_legitimacy_confidence") or "")
     capture_failed = bool(cap.get("capture_failed"))
@@ -1965,6 +2005,10 @@ def _apply_evidence_adjudication_layer(
             hard_blockers.append("wrapper_or_interstitial_redirect_pattern")
     if bool(cap.get("contains_punycode") or cap.get("contains_non_ascii")) and int(hs.get("password_input_count") or 0) > 0:
         hard_blockers.append("punycode_or_non_ascii_with_credential_context")
+    if bool(beh.get("network_exfiltration_suspected")) and (
+        int(hs.get("password_input_count") or 0) > 0 or int(hs.get("form_count") or 0) > 0
+    ):
+        hard_blockers.append("network_exfiltration_with_credential_context")
 
     phish_signals: List[str] = []
     legit_signals: List[str] = []
@@ -1998,6 +2042,39 @@ def _apply_evidence_adjudication_layer(
         amb_signals.append("high_model_probability_spread")
     if wrapper_official_authwall_safe and bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
         amb_signals.append("official_authwall_wrapper_pattern")
+    if bool(beh.get("js_dynamic_form_injection_detected")):
+        phish_score += 0.20
+        phish_signals.append("js_dynamic_form_injection_detected")
+    if bool(beh.get("js_anti_debugging_detected")):
+        phish_score += 0.15
+        phish_signals.append("js_anti_debugging_detected")
+    js_obf = float(beh.get("js_obfuscation_score") or 0.0)
+    js_obf_signals = set(beh.get("js_obfuscation_signals") or [])
+    has_auth_context = bool(
+        int(hs.get("password_input_count") or 0) > 0
+        or int(hs.get("form_count") or 0) > 0
+        or str(dom.get("page_family") or "") == "auth_login_recovery"
+    )
+    if has_auth_context and (js_obf >= 0.5 or {"eval_atob_pattern", "eval_unescape_pattern"} & js_obf_signals):
+        phish_score += 0.15
+        phish_signals.append("high_js_obfuscation_auth_context")
+    elif js_obf >= 0.35:
+        phish_score += 0.08
+        phish_signals.append("elevated_js_obfuscation")
+    if (beh.get("js_suspicious_fetch_domains") or beh.get("js_suspicious_redirect_domains")) and has_auth_context:
+        phish_score += 0.18
+        phish_signals.append("js_unrelated_network_calls_with_auth_context")
+    elif bool(beh.get("network_unrelated_domains")):
+        amb_signals.append("unrelated_third_party_network_domains")
+        if len(beh.get("network_unrelated_domains") or []) >= 5:
+            phish_score += 0.08
+            phish_signals.append("many_unrelated_third_party_domains")
+    if bool(beh.get("behavior_analysis_unavailable")):
+        amb_signals.append("behavior_analysis_unavailable")
+    if security_block_page_detected:
+        amb_signals.append("security_block_page_observed")
+        phish_score += 0.18
+        phish_signals.append("security_vendor_blocked_as_malicious")
 
     if host_identity == "suspicious_host_pattern":
         phish_score += 0.30
@@ -2060,10 +2137,10 @@ def _apply_evidence_adjudication_layer(
     elif hts == "hosting_trust_partial":
         legit_score += 0.25
         legit_signals.append("hosting_trust_partial")
-    if (not html_dom_unavailable) and int(hs.get("password_input_count") or 0) == 0 and not bool(dom.get("suspicious_credential_collection_pattern")):
+    if (not security_block_page_detected) and (not html_dom_unavailable) and int(hs.get("password_input_count") or 0) == 0 and not bool(dom.get("suspicious_credential_collection_pattern")):
         legit_score += 0.25
         legit_signals.append("no_credential_capture")
-    if (not html_dom_unavailable) and int(dom.get("form_action_external_domain_count") or 0) == 0:
+    if (not security_block_page_detected) and (not html_dom_unavailable) and int(dom.get("form_action_external_domain_count") or 0) == 0:
         legit_score += 0.20
         legit_signals.append("no_cross_domain_forms")
     free_hosted_brand_imp = bool(cap.get("final_domain_is_free_hosting")) and bool(_is_strong_brand_domain_mismatch(cap, dom))
@@ -2072,7 +2149,7 @@ def _apply_evidence_adjudication_layer(
     ) or bool(out.get("cloud_hosted_brand_impersonation"))
     impersonation_hosting_context = bool(free_hosted_brand_imp or cloud_hosted_brand_imp)
 
-    if (not impersonation_hosting_context) and (
+    if (not security_block_page_detected) and (not impersonation_hosting_context) and (
         bool(dom.get("content_rich_profile"))
         or str(dom.get("page_family") or "") in {
         "article_news",
@@ -2083,7 +2160,7 @@ def _apply_evidence_adjudication_layer(
     ):
         legit_score += 0.20
         legit_signals.append("content_rich_page")
-    if (not impersonation_hosting_context) and (float(html_dom_risk) if isinstance(html_dom_risk, (int, float)) else 1.0) <= 0.20 and (
+    if (not security_block_page_detected) and (not impersonation_hosting_context) and (float(html_dom_risk) if isinstance(html_dom_risk, (int, float)) else 1.0) <= 0.20 and (
         float(html_structure_risk) if isinstance(html_structure_risk, (int, float)) else 1.0
     ) <= 0.30:
         legit_score += 0.20
@@ -2109,8 +2186,18 @@ def _apply_evidence_adjudication_layer(
         and "strong_brand_domain_mismatch" in phish_signals
         and "ml_consensus_strong_phishing" in phish_signals
     )
+    security_block_escalation = bool(
+        security_block_page_detected
+        and (
+            "ml_consensus_strong_phishing" in phish_signals
+            or "high_ml_score" in phish_signals
+            or "strong_brand_domain_mismatch" in phish_signals
+        )
+    )
 
     if hard_blockers:
+        final_label = "likely_phishing"
+    elif security_block_escalation:
         final_label = "likely_phishing"
     elif freehost_mismatch_consensus_escalation:
         final_label = "likely_phishing"
@@ -2142,6 +2229,8 @@ def _apply_evidence_adjudication_layer(
     elif legit_score >= 0.70 and phish_score < 0.45:
         final_label = "likely_legitimate"
     else:
+        final_label = "uncertain"
+    if security_block_page_detected and final_label == "likely_legitimate":
         final_label = "uncertain"
 
     out["evidence_adjudication_applied"] = True
@@ -2603,6 +2692,13 @@ def build_dashboard_analysis(
         html_dom_anomaly_error=hde_s,
         verdict_cfg=verdict_cfg,
     )
+    behavior_signals = extract_behavior_signals(
+        html_path=str(html_path) if html_path else None,
+        layer2_capture=capture_for_policy,
+        html_structure_summary=html_structure.get("html_structure_summary"),
+        html_dom_summary=html_dom.get("html_dom_anomaly_summary"),
+        platform_context_type=str(platform_context.get("platform_context_type") or "unknown"),
+    )
     verdict = _apply_evidence_adjudication_layer(
         verdict,
         ml=ml,
@@ -2612,6 +2708,7 @@ def build_dashboard_analysis(
         html_structure_risk=html_structure.get("html_structure_risk_score"),
         html_dom_risk=html_dom.get("html_dom_anomaly_risk_score"),
         html_dom_enrichment=layer3_enrichment,
+        behavior_signals=behavior_signals,
         host_path_reasoning=host_path_reasoning,
         platform_context=platform_context,
         trust_blockers=trust_blockers,
@@ -2637,6 +2734,7 @@ def build_dashboard_analysis(
         "html_structure": html_structure,
         "html_dom_anomaly": html_dom,
         "html_dom_enrichment": layer3_enrichment,
+        "behavior_signals": behavior_signals,
         "enrichment_signals": {
             "strong_signals": strong_enrichment_signals,
             "weak_contextual_signals": weak_enrichment_signals,
