@@ -76,3 +76,6 @@ Thumbs.db
 
 # --- Jupyter ---
 .ipynb_checkpoints/
+
+# --- local backup archive (delete after uploading) ---
+phishing_project_backup_*.zip
