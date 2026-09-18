@@ -129,3 +129,5 @@ Generated runtime artifacts should remain untracked:
 # targeted regression set used for deployment checks
 pytest tests/test_evidence_adjudication_layer.py tests/test_hosting_domain_trust_layer.py tests/test_ml_model_agreement.py tests/test_behavior_signals.py -q
 ```
+
+# This project is under review and will be rebuild after planning
