@@ -95,7 +95,7 @@ def augment_cleaned_with_simple_legit(
         base["parse_error"] = errs
 
     existing = set(base["canonical_url"].astype(str).str.strip())
-    rows_in = curated_legit_augment_rows(simple_jsonl=jsonl_path, include_hard_legit=True)
+    rows_in = curated_legit_augment_rows(simple_jsonl=jsonl_path, include_hard_legit=False)  # hard_legit is evaluation-only
     added = 0
     mini: List[Dict[str, Any]] = []
     col_list = list(base.columns)

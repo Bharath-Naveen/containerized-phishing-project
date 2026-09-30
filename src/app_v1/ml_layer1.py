@@ -189,7 +189,8 @@ def compute_layer1_model_agreement(
             "agreement_error": str(e),
         }
 
-    expected = _expected_feature_columns()
+    bundle = load_layer1_bundle()
+    expected = bundle["feature_columns"] if bundle is not None else _expected_feature_columns()
     if expected:
         for c in expected:
             if c not in X_raw.columns:
@@ -225,6 +226,27 @@ def compute_layer1_model_agreement(
         )
 
     return build_model_agreement_from_outputs(model_outputs, ml_primary_prob=ml_primary, primary_ml=primary_ml)
+
+
+def _bundle_path() -> Path:
+    return models_dir() / "layer1_bundle.joblib"
+
+
+def load_layer1_bundle() -> Optional[Dict[str, Any]]:
+    """The model bundle written by train.py: pipeline + calibrator + feature list + provenance.
+
+    Preferred over the loose layer1_primary.joblib / calibrator / training_config.json files,
+    which could come from different runs.
+    """
+    p = _bundle_path()
+    if not p.is_file():
+        return None
+    try:
+        b = joblib.load(p)
+        return b if isinstance(b, dict) and "pipeline" in b else None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("bundle load failed: %s", e)
+        return None
 
 
 def _default_model_path() -> Path:
@@ -294,8 +316,9 @@ def predict_layer1(
     model_path: Optional[Path] = None,
     use_dns: bool = False,
 ) -> Dict[str, Any]:
-    path = model_path or _default_model_path()
-    if not path.is_file():
+    bundle = load_layer1_bundle() if model_path is None else None
+    path = _bundle_path() if bundle is not None else (model_path or _default_model_path())
+    if bundle is None and not path.is_file():
         return {
             "error": f"no_model_file:{path}",
             "phish_proba": None,
@@ -303,14 +326,14 @@ def predict_layer1(
             "brand_structure_explanations": [],
             "brand_structure_features": {},
         }
-    pipe = joblib.load(path)
+    pipe = bundle["pipeline"] if bundle is not None else joblib.load(path)
     X_raw, canon, brand_explain = build_layer1_frame(url, use_dns=use_dns)
     brand_snapshot = {
         k: int(X_raw.iloc[0][k]) if k in X_raw.columns and pd.notna(X_raw.iloc[0][k]) else 0
         for k in BRAND_STRUCTURE_FEATURE_KEYS
         if k in X_raw.columns
     }
-    expected = _expected_feature_columns()
+    expected = bundle["feature_columns"] if bundle is not None else _expected_feature_columns()
     if expected:
         for c in expected:
             if c not in X_raw.columns:
@@ -354,7 +377,7 @@ def predict_layer1(
             "brand_structure_features": brand_snapshot,
         }
     p_raw = float(p_phish)
-    cal = _load_probability_calibrator()
+    cal = bundle.get("calibrator") if bundle is not None else _load_probability_calibrator()
     p_cal = _apply_probability_calibrator(p_raw, cal) if cal is not None else p_raw
     contrib: List[Dict[str, Any]] = []
     try:
@@ -379,12 +402,16 @@ def predict_layer1(
         logger.debug("contrib skipped: %s", e)
     return {
         "model_path": str(path),
+        "model_bundle": (
+            {k: bundle.get(k) for k in ("model_name", "selection_policy", "created_utc", "train_csv_sha256")}
+            if bundle is not None else None
+        ),
         "canonical_url": canon,
         "phish_proba_model_raw": round(p_raw, 6),
         "phish_proba_calibrated": round(p_cal, 6),
         "phish_proba": round(p_cal, 6),
         "probability_calibration": (
-            {"type": cal.get("type"), "path": str(_calibrator_path())} if cal is not None else None
+            {"type": cal.get("type"), "path": str(path if bundle is not None else _calibrator_path())} if cal is not None else None
         ),
         "predicted_phishing": bool(p_cal >= 0.5),
         "top_linear_signals": contrib,

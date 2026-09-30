@@ -10,6 +10,8 @@ from src.pipeline.features.dns_features import extract_dns_features
 from src.pipeline.features.hosting_features import extract_hosting_features
 from src.pipeline.features.url_features import extract_url_features
 from src.pipeline.safe_url import netloc_path_query_from_url, safe_hostname
+from src.pipeline.url_normalize import canonical_url as canonical_url_fn
+from src.pipeline.url_normalize import feature_url, original_scheme
 
 
 def _host_from_url(url: str) -> str:
@@ -32,9 +34,19 @@ def layer1_feature_key_set(*, include_dns: bool) -> Set[str]:
 
 
 def extract_layer1_features(canonical_url: str, *, use_dns: bool = False) -> Dict[str, Any]:
-    url = (canonical_url or "").strip()
-    row: Dict[str, Any] = {"canonical_url": url}
+    """Layer-1 features for one URL.
+
+    Accepts raw or canonical input: the URL is canonicalized and made scheme-neutral first
+    (see :mod:`src.pipeline.url_normalize`), so training rows and app requests for the same
+    address always produce identical features. ``has_https`` keeps the original scheme for
+    display, but it and the two https-derived features are excluded from model training.
+    """
+    raw_in = (canonical_url or "").strip()
+    canon, _inv, _err = canonical_url_fn(raw_in)
+    url = feature_url(raw_in) or raw_in
+    row: Dict[str, Any] = {"canonical_url": canon or raw_in}
     row.update(extract_url_features(url))
+    row["has_https"] = int(original_scheme(canon or raw_in) == "https")
     row.update(extract_hosting_features(url))
     # Avoid ultra-high-cardinality string for sklearn one-hot; keep numeric bucket.
     reg = str(row.pop("registered_domain", "") or "")

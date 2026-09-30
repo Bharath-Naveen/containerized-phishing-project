@@ -19,6 +19,7 @@ from src.pipeline.fresh_data import count_by, get_registered_domain, label_sanit
 from src.pipeline.merge_datasets import merge_datasets
 from src.pipeline.paths import ensure_layout, models_dir, outputs_dir, processed_dir, reports_dir
 from src.pipeline.split_leak_safe import split_leak_safe
+from src.pipeline.url_normalize import canonical_url
 from src.pipeline.train import train
 
 logger = logging.getLogger(__name__)
@@ -93,10 +94,10 @@ def ensure_split_compatible(enriched_csv: Path) -> Path:
 
     if "canonical_url" not in df.columns:
         if "url" in df.columns:
-            df["canonical_url"] = df["url"].astype(str).str.strip()
+            df["canonical_url"] = [canonical_url(u)[0] for u in df["url"].astype(str)]
             changed = True
         elif "input_url" in df.columns:
-            df["canonical_url"] = df["input_url"].astype(str).str.strip()
+            df["canonical_url"] = [canonical_url(u)[0] for u in df["input_url"].astype(str)]
             changed = True
         else:
             raise ValueError("Split compatibility failed: missing canonical_url and no url/input_url fallback.")
@@ -126,9 +127,9 @@ def ensure_enrich_compatible(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if "canonical_url" not in out.columns:
         if "url" in out.columns:
-            out["canonical_url"] = out["url"].astype(str).str.strip()
+            out["canonical_url"] = [canonical_url(u)[0] for u in out["url"].astype(str)]
         elif "input_url" in out.columns:
-            out["canonical_url"] = out["input_url"].astype(str).str.strip()
+            out["canonical_url"] = [canonical_url(u)[0] for u in out["input_url"].astype(str)]
         else:
             raise ValueError("Enrich compatibility failed: missing canonical_url and no url/input_url fallback.")
     return out
@@ -301,7 +302,7 @@ def retrain_with_fresh(
             test_csv,
             layer1_only=True,
             layer1_include_dns=False,
-            primary_selection="composite",
+            primary_selection="validated",
             write_primary_artifact=False,
         )
     finally:

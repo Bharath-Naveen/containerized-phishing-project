@@ -60,6 +60,14 @@ def stratified_group_train_test(
     train["group_key_fallback_used"] = fallback.iloc[train_idx].values
     test["group_key_fallback_used"] = fallback.iloc[test_idx].values
 
+    # Guards (rebuild Phase 1): fail loudly instead of producing a leaky split.
+    from src.pipeline.guards import check_group_keys, check_no_group_overlap
+
+    key_stats = check_group_keys(df["_leak_group"].values, where="split_leak_safe")
+    check_no_group_overlap(
+        df["_leak_group"].iloc[train_idx].values, df["_leak_group"].iloc[test_idx].values, where="split_leak_safe"
+    )
+
     stats: Dict[str, Any] = {
         "split_method": "StratifiedGroupKFold_first_fold",
         "n_splits_param": n_splits,
@@ -68,6 +76,8 @@ def stratified_group_train_test(
         "n_test": len(test),
         "train_groups": int(ensure_group_column(train).nunique()),
         "test_groups": int(ensure_group_column(test).nunique()),
+        "malformed_group_keys": key_stats["malformed_group_keys"],
+        "malformed_group_fraction": key_stats["malformed_fraction"],
     }
     return train, test, stats
 

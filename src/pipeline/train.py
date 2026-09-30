@@ -33,7 +33,7 @@ from src.pipeline.layer1_features import layer1_feature_key_set
 from src.pipeline.paths import ensure_layout, figures_dir, metrics_dir, models_dir, processed_dir, reports_dir
 
 logger = logging.getLogger(__name__)
-PrimarySelectionPolicy = Literal["composite", "f1", "roc_auc"]
+PrimarySelectionPolicy = Literal["validated", "composite", "f1", "roc_auc"]
 
 # Proxy features that often encode “fetch worked” vs “dead domain” more than page semantics.
 FETCH_PROXY_FEATURES: Set[str] = {
@@ -51,8 +51,10 @@ FETCH_PROXY_FEATURES: Set[str] = {
     "challenge_detected",
 }
 
-# Scheme is a weak legitimacy signal in our Kaggle mix (many benign rows are http://; phish uses https).
-LAYER1_EXCLUDE_FROM_X: Set[str] = {"has_https"}
+# Scheme is a dataset artifact in the Kaggle mix (explicit https:// is far more common on phishing
+# rows). Features are computed scheme-neutral (url_normalize.feature_url) and every scheme-derived
+# column is kept out of training so the model cannot learn it.
+LAYER1_EXCLUDE_FROM_X: Set[str] = {"has_https", "https_without_official_anchor", "official_anchor_with_https"}
 
 # Used only for **choosing** ``layer1_primary.joblib`` among fitted models (documented; not a runtime allowlist).
 LAYER1_OFFICIAL_HTTPS_AUDIT_URLS: Tuple[str, ...] = (
@@ -154,7 +156,7 @@ def _xgb_monotone_decreasing_trust(num_cols: List[str]) -> Tuple[int, ...]:
         "simple_public_web_shape",
         "simple_official_homepage_shape",
     }
-    https_mismatch_increase = {"https_without_official_anchor"}
+    https_mismatch_increase: Set[str] = set()  # scheme-derived features are no longer trained on
     phish_risk_increase = {
         "suspicious_redirect_query_flag",
         "path_query_authish_keyword_hits",
@@ -243,8 +245,22 @@ def _pick_layer1_primary_model_by_policy(
     if not metrics_all:
         raise ValueError("metrics_all empty")
 
-    if policy not in {"composite", "f1", "roc_auc"}:
+    if policy not in {"validated", "composite", "f1", "roc_auc"}:
         raise ValueError(f"Unsupported primary selection policy: {policy}")
+
+    if policy == "validated":
+        # Rebuild default: choose on held-out VALIDATION data only (never the test set).
+        # Primary key: PR-AUC on the domain-grouped validation split. Tie-break: lower false-positive
+        # rate on the validation half of the official-brand URLs.
+        return str(
+            max(
+                metrics_all,
+                key=lambda m: (
+                    round(float(m.get("val_pr_auc") or -1.0), 3),
+                    -float(m.get("val_official_brand_fp_rate") if m.get("val_official_brand_fp_rate") is not None else 1.0),
+                ),
+            )["model"]
+        )
 
     def composite_score(m: Dict[str, Any]) -> float:
         f1 = m.get("f1") or 0.0
@@ -330,7 +346,7 @@ def train(
     exclude_fetch_proxy_features: bool = True,
     layer1_only: bool = False,
     layer1_include_dns: bool = False,
-    primary_selection: PrimarySelectionPolicy = "composite",
+    primary_selection: PrimarySelectionPolicy = "validated",
     write_primary_artifact: bool = True,
 ) -> Path:
     ensure_layout()
@@ -378,13 +394,31 @@ def train(
     y_test = y[~is_train.values]
     meta_test = meta_full.loc[~is_train.values].reset_index(drop=True)
 
-    X_tr, X_val, y_tr, y_val = train_test_split(
-        X_train,
-        y_train,
-        test_size=val_size,
-        random_state=random_state,
-        stratify=y_train if len(np.unique(y_train)) > 1 else None,
-    )
+    # Validation split is grouped by registered domain too (it used to be a random row split, so the
+    # calibrator and any validation-based choice saw domains that were also in its training rows).
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    from src.pipeline.safe_url import leak_safe_group_key
+
+    train_urls = full.loc[is_train, "canonical_url"].fillna("").astype(str).values if "canonical_url" in full.columns else None
+    if train_urls is not None and len(np.unique(y_train)) > 1:
+        g_train = np.array([leak_safe_group_key(u)[0] for u in train_urls])
+        n_val_splits = max(3, int(round(1.0 / max(val_size, 0.05))))
+        sgkf = StratifiedGroupKFold(n_splits=n_val_splits, shuffle=True, random_state=random_state)
+        tr_idx, val_idx = next(sgkf.split(np.zeros(len(y_train)), y_train, g_train))
+        X_tr, X_val = X_train.iloc[tr_idx].reset_index(drop=True), X_train.iloc[val_idx].reset_index(drop=True)
+        y_tr, y_val = y_train[tr_idx], y_train[val_idx]
+    else:
+        X_tr, X_val, y_tr, y_val = train_test_split(
+            X_train, y_train, test_size=val_size, random_state=random_state,
+            stratify=y_train if len(np.unique(y_train)) > 1 else None,
+        )
+
+    # Train/serve parity guard: stored features must equal what the app computes for the same URL.
+    from src.pipeline.guards import check_feature_parity
+
+    parity = check_feature_parity(full.loc[is_train], list(X.columns), n=300, seed=random_state, where="train")
+    official_val = _official_brand_frame(list(X.columns), num_cols, split="val")
 
     models: Dict[str, Any] = {
         "logistic_regression": LogisticRegression(max_iter=400, class_weight="balanced"),
@@ -469,6 +503,11 @@ def train(
         "layer1_primary_selection_policy": primary_selection if layer1_only else None,
         "layer1_official_https_audit_urls": list(LAYER1_OFFICIAL_HTTPS_AUDIT_URLS) if layer1_only else None,
         "layer1_dropped_from_training_features": sorted(LAYER1_EXCLUDE_FROM_X) if layer1_only else None,
+        "validation_split": "StratifiedGroupKFold by registered domain, one fold of the training rows",
+        "n_fit_rows": int(len(y_tr)),
+        "n_validation_rows": int(len(y_val)),
+        "feature_parity_check": parity,
+        "official_brand_val_urls": 0 if official_val is None else int(len(official_val)),
     }
     (reports_dir() / "training_config.json").write_text(json.dumps(training_meta, indent=2), encoding="utf-8")
 
@@ -477,6 +516,7 @@ def train(
         logger.info("Fitting %s …", name)
         pipe.fit(X_tr, y_tr)
         m = _evaluate(name, pipe, X_test, y_test)
+        m.update(_validation_metrics(pipe, X_val, y_val, official_val))
         try:
             m["audit_official_https_mean_phish_proba"] = _audit_official_https_mean_phish(pipe, list(X.columns))
         except Exception as ex:
@@ -559,7 +599,12 @@ def train(
                 row.get("roc_auc"),
                 row.get("test_mean_phish_proba_official_anchor_rows"),
             )
-            _maybe_fit_layer1_probability_calibrator(X_val, y_val, X_test, y_test)
+            cal = _maybe_fit_layer1_probability_calibrator(X_val, y_val, X_test, y_test)
+            _write_layer1_bundle(
+                pipe_path=dst, calibrator=cal, feature_columns=list(X.columns), model_name=best_name,
+                policy=primary_selection, metrics=row, train_path=tr_path,
+                n_fit=int(len(y_tr)), n_val=int(len(y_val)), n_test=int(len(y_test)), seed=random_state,
+            )
         else:
             logger.info(
                 "Layer-1 primary candidate (%s policy) = %s; write_primary_artifact=%s so layer1_primary.joblib unchanged.",
@@ -579,7 +624,7 @@ def _maybe_fit_layer1_probability_calibrator(
     """Fit isotonic (fallback: Platt LR) on validation raw P(phish); persist for inference."""
     primary_path = models_dir() / "layer1_primary.joblib"
     if not primary_path.is_file():
-        return
+        return None
     try:
         from sklearn.isotonic import IsotonicRegression
         from sklearn.linear_model import LogisticRegression as LRPlatt
@@ -631,8 +676,87 @@ def _maybe_fit_layer1_probability_calibrator(
             tc["layer1_calibration_report"] = rep
             cfgp.write_text(json.dumps(tc, indent=2), encoding="utf-8")
         logger.info("Layer-1 probability calibration -> %s (Brier raw=%.4f cal=%.4f)", ctype, b_raw, b_cal)
+        return {"type": ctype, "model": cal_model, "fitted_on": "domain-grouped validation split", **rep}
     except Exception as ex:
         logger.warning("Layer-1 probability calibration failed: %s", ex)
+        return None
+
+
+def _official_brand_frame(feature_columns: List[str], num_cols: List[str], *, split: str) -> Any:
+    """Feature frame for the official-brand evaluation URLs (all legitimate)."""
+    from src.pipeline.evaluation_sets import load_official_brand_rows
+    from src.pipeline.layer1_features import extract_layer1_features
+
+    rows = load_official_brand_rows(split=split)
+    if not rows:
+        return None
+    X = pd.DataFrame([extract_layer1_features(r["url"]) for r in rows])
+    for c in feature_columns:
+        if c not in X.columns:
+            X[c] = np.nan
+    X = X[feature_columns].copy()
+    for c in num_cols:
+        X[c] = pd.to_numeric(X[c], errors="coerce")
+    for c in feature_columns:
+        if c not in num_cols:
+            X[c] = X[c].fillna("missing").astype(str)
+    return X
+
+
+def _validation_metrics(pipe: Pipeline, X_val: pd.DataFrame, y_val: np.ndarray, official_val: Any) -> Dict[str, Any]:
+    from sklearn.metrics import average_precision_score
+
+    out: Dict[str, Any] = {}
+    try:
+        P = pipe.predict_proba(X_val)
+        cls = np.asarray(pipe.classes_)
+        pv = np.array([phish_probability_from_proba_row(P[i], cls) for i in range(len(P))])
+        out["val_pr_auc"] = float(average_precision_score(y_val, pv))
+        out["val_roc_auc"] = float(roc_auc_score(y_val, pv))
+        out["val_f1"] = float(f1_score(y_val, (pv >= 0.5).astype(int), zero_division=0))
+    except Exception as ex:
+        logger.warning("validation metrics failed: %s", ex)
+    if official_val is not None and len(official_val):
+        try:
+            P = pipe.predict_proba(official_val)
+            cls = np.asarray(pipe.classes_)
+            po = np.array([phish_probability_from_proba_row(P[i], cls) for i in range(len(P))])
+            out["val_official_brand_fp_rate"] = float(np.mean(po >= 0.5))
+        except Exception as ex:
+            logger.warning("official-brand validation failed: %s", ex)
+    return out
+
+
+def _write_layer1_bundle(
+    *, pipe_path: Path, calibrator: Any, feature_columns: List[str], model_name: str, policy: str,
+    metrics: Dict[str, Any], train_path: Path, n_fit: int, n_val: int, n_test: int, seed: int,
+) -> Path:
+    """Model + calibrator + feature list + provenance in ONE file, so they can never drift apart."""
+    import hashlib
+    from datetime import datetime, timezone
+
+    h = hashlib.sha256()
+    with open(train_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    bundle = {
+        "bundle_version": 1,
+        "pipeline": joblib.load(pipe_path),
+        "calibrator": calibrator,
+        "feature_columns": feature_columns,
+        "model_name": model_name,
+        "selection_policy": policy,
+        "metrics": {k: v for k, v in metrics.items() if not isinstance(v, (list, dict))},
+        "train_csv_sha256": h.hexdigest(),
+        "n_fit_rows": n_fit, "n_validation_rows": n_val, "n_test_rows": n_test,
+        "seed": seed,
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "feature_space": "scheme-neutral layer-1 URL/host features (src/pipeline/url_normalize.py)",
+    }
+    out = models_dir() / "layer1_bundle.joblib"
+    joblib.dump(bundle, out)
+    logger.info("Wrote model bundle -> %s (%s, policy=%s)", out.name, model_name, policy)
+    return out
 
 
 def main() -> None:
@@ -661,9 +785,9 @@ def main() -> None:
     )
     p.add_argument(
         "--primary-selection",
-        choices=["composite", "f1", "roc_auc"],
-        default="composite",
-        help="Policy to choose layer1_primary.joblib when --layer1-only is active.",
+        choices=["validated", "composite", "f1", "roc_auc"],
+        default="validated",
+        help="Policy to choose layer1_primary.joblib when --layer1-only is active (validated = best validation PR-AUC).",
     )
     p.add_argument(
         "--no-write-primary",

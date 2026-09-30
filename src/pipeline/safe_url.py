@@ -67,7 +67,7 @@ def canonicalize_url_safe(raw: str) -> Tuple[str, int, str]:
     netloc = (parts.netloc or "").lower()
     if not netloc:
         return s, 1, "missing_host"
-    path = parts.path or ""
+    path = parts.path or "/"  # "x.com" and "x.com/" are the same address (rebuild: one canonical form)
     if path.endswith("/") and path != "/":
         path = path.rstrip("/")
     query = parts.query or ""
@@ -102,7 +102,10 @@ def leak_safe_group_key(canonical_url: str) -> Tuple[str, int]:
     import tldextract
 
     url = (canonical_url or "").strip()
-    host, perr = safe_hostname(url)
+    # Canonicalize first: a bare "example.com/path" has no parsable hostname, which used to
+    # give every such row its own malformed:: group and silently broke domain grouping.
+    canon, _inv, _err = canonicalize_url_safe(url)
+    host, perr = safe_hostname(canon or url)
     if perr or not host:
         return f"malformed::{stable_url_fingerprint(url)}", 1
     try:

@@ -38,12 +38,12 @@ def _resolve_latest_run_info(summary_path: Path) -> tuple[Path, list[dict[str, A
         if not isinstance(metrics, list) or not metrics:
             raise ValueError("no model_metrics in summary or run metrics.json")
 
-    policy = "composite"
+    policy = "validated"
     cfg_path = run_dir / "reports" / "training_config.json"
     if cfg_path.is_file():
         cfg = _load_json(cfg_path)
         p = str(cfg.get("layer1_primary_selection_policy") or "").strip().lower()
-        if p in {"composite", "f1", "roc_auc"}:
+        if p in {"validated", "composite", "f1", "roc_auc"}:
             policy = p
     return run_dir, metrics, policy
 
@@ -69,6 +69,16 @@ def deploy_latest_selected_layer1_primary(*, summary_path: Path | None = None, v
         backup_path = Path("")
 
     dst.write_bytes(src.read_bytes())
+
+    # Ship the bundle (model + its own calibrator + feature list) with the model. Deploying only the
+    # model used to leave an older calibrator fit for a different model in place.
+    src_bundle = run_dir / "models" / "layer1_bundle.joblib"
+    dst_bundle = md / "layer1_bundle.joblib"
+    if src_bundle.is_file():
+        dst_bundle.write_bytes(src_bundle.read_bytes())
+    elif dst_bundle.is_file():
+        dst_bundle.unlink()  # a stale bundle from another model must not shadow the new primary
+        logger.warning("Run has no layer1_bundle.joblib; removed stale bundle so the app uses the new primary.")
 
     out = predict_layer1(verify_url, model_path=dst)
     if str(out.get("error") or "").startswith("no_model_file"):

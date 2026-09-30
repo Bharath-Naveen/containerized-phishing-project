@@ -144,7 +144,7 @@ def run_kaggle_pipeline(
     fresh_dataset_csv: Path | None = None,
     fresh_recent_holdout_csv: Path | None = None,
     fresh_weight: float = 0.25,
-    primary_selection: str = "composite",
+    primary_selection: str = "validated",
     write_primary_artifact: bool = True,
 ) -> None:
     ensure_layout()
@@ -311,6 +311,19 @@ def run_kaggle_pipeline(
         )
         logger.info("Sample stats: %s", json.dumps(sstats, indent=2))
 
+    # Evaluation hygiene (rebuild Phase 1): evaluation URLs never enter training.
+    from src.pipeline.evaluation_sets import drop_evaluation_rows
+
+    _pre = pd.read_csv(enrich_input, dtype=str, low_memory=False)
+    _kept, excl_stats = drop_evaluation_rows(_pre)
+    _kept.to_csv(enrich_input, index=False)
+    manifest["evaluation_exclusions"] = excl_stats
+    run_context["evaluation_exclusions"] = excl_stats
+    (reports_dir() / "evaluation_exclusions.json").write_text(json.dumps(excl_stats, indent=2), encoding="utf-8")
+    logger.info("Evaluation exclusions: %s", excl_stats)
+    sample_rows = len(_kept)
+    del _pre, _kept
+
     ck_name = f"kaggle_layer1_n{sample_rows}_rs{seed}.csv"
     logger.info("=== enrich layer1 (input=%s, checkpoint=%s) ===", enrich_input, ck_name)
     enrich(
@@ -472,8 +485,8 @@ def main() -> None:
     )
     ap.add_argument(
         "--primary-selection",
-        choices=["composite", "f1", "roc_auc"],
-        default="composite",
+        choices=["validated", "composite", "f1", "roc_auc"],
+        default="validated",
         help="Policy for selecting layer1_primary.joblib (default keeps current behavior).",
     )
     ap.add_argument(
