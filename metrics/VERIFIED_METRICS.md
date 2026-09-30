@@ -99,20 +99,22 @@ Without live capture the adjudication layer treats missing page evidence as a re
 
 ## Full system with live page capture
 
-From `phishguard evaluate-live` (GitHub Actions, commit `2b90195f56`, 2026-09-30T17:51:13+00:00). Each page was captured once with Playwright and analyzed twice (legitimacy rescue on and off). Dummy login interaction: on. Raw values: `metrics/results/live_capture.json`.
+From `phishguard evaluate-live` (GitHub Actions, commit `0014d21fdc`, 2026-09-30T19:07:59+00:00). Each page was captured once with Playwright and analyzed twice (legitimacy rescue on and off). Dummy login interaction: on. Raw values: `metrics/results/live_capture.json`.
 
 | Set | URLs | Captured OK | likely_phishing | uncertain | likely_legitimate | Pass rate | Pass rate (captured OK) | likely_phishing with rescue on / off |
 |---|---|---|---|---|---|---|---|---|
 | eal_edge_cases | 15 | 14 (93.3%) | 3 | 8 | 4 | 86.7% | 85.7% | 3 / 3 (0 changed) |
 | url_suites | 18 | 14 (77.8%) | 7 | 4 | 7 | 94.4% | 92.9% | 7 / 7 (0 changed) |
 | hard_legit | 15 | 15 (100.0%) | 2 | 6 | 7 | 86.7% | 86.7% | 2 / 2 (0 changed) |
-| official_brand | 136 | 134 (98.5%) | 8 | 26 | 102 | 94.1% | 94.8% | 8 / 8 (0 changed) |
-| phishstats_live | 0 | 0 (n/a) | 0 | 0 | 0 | n/a | n/a | 0 / 0 (0 changed) |
-| tranco_live | 60 | 42 (70.0%) | 22 | 10 | 28 | 63.3% | 90.5% | 22 / 22 (0 changed) |
+| official_brand | 136 | 134 (98.5%) | 8 | 28 | 100 | 94.1% | 94.8% | 8 / 8 (0 changed) |
+| phishing_feed_live | 60 | 59 (98.3%) | 22 | 13 | 25 | 36.7% | 35.6% | 22 / 22 (0 changed) |
+| tranco_live | 60 | 53 (88.3%) | 14 | 12 | 34 | 76.7% | 86.8% | 14 / 14 (0 changed) |
+
+Fresh phishing URLs came from: phishstats. Popular-homepage sample: Tranco list K9QPW, 17 infrastructure domains without a website skipped.
 
 Pass means: legitimate sets not labeled likely_phishing; phishing sets labeled likely_phishing; the edge cases follow their own expected outcome (`data/evaluation/eal_edge_cases.json`). Live phishing pages are often already taken down, so check the captured-OK column before reading a phishing pass rate.
 
-Full-path latency (capture + analysis): p50 7.1 s, p95 16.1 s over 244 URLs (capture (Playwright) + full analysis, one URL at a time, GitHub-hosted runner).
+Full-path latency (capture + analysis): p50 6.8 s, p95 15.0 s over 304 URLs (capture (Playwright) + full analysis, one URL at a time, GitHub-hosted runner).
 
 Edge cases that did not pass:
 
