@@ -1,4 +1,4 @@
-# How the project works (current state, after rebuild Phase 3)
+# How the project works (current state, after rebuild Phase 4)
 
 A plain-language map of the system. It is updated as the rebuild changes things; the dated history of each change is in [REBUILD_LOG.md](REBUILD_LOG.md).
 
@@ -15,7 +15,7 @@ Try it: `phishguard analyze --url "https://example.com" --no-reinforcement` (ML-
 |---|---|---|
 | 1. Normalize | The URL is put in one canonical form (lowercase host, scheme added if missing, trailing slash rules). Features are computed from a scheme-neutral copy (`http://` forced), so `https://x.com` and `x.com` look identical to the model. | `urls/normalize.py` |
 | 2. Layer 1 features | 59 cheap features from the URL text only: lengths, dots, digits, entropy, suspicious words, brand tokens in the wrong place, free-hosting domains, official-domain registry match. No network. 54 of them are used by the model (3 scheme-derived ones and 2 high-cardinality text columns are left out). | `features/layer1.py`, `features/` |
-| 3. Layer 1 model | The **model bundle** (`outputs/models/layer1_bundle.joblib`) holds the trained pipeline, its own probability calibrator and the exact feature list. Output: raw and calibrated P(phishing). | `app/ml_layer1.py` |
+| 3. Layer 1 model | The **model bundle** (`outputs/models/layer1_bundle.joblib` if you trained one, otherwise the verified one shipped in `models/layer1/`) holds the trained pipeline, its own probability calibrator and the exact feature list. Output: raw and calibrated P(phishing). | `app/ml_layer1.py` |
 | 4. Model agreement | Four "witness" models (LR, RF, XGBoost, LightGBM) also score the URL; their votes become a consensus signal (strong_phishing, split, and so on). Supporting evidence only. | `app/ml_layer1.py` (`compute_layer1_model_agreement`) |
 | 5. Layer 2 capture (optional) | Playwright loads the page: final URL, redirect chain, form targets, TLS/cert state, network requests, HTML. Skipped in "ML-only" mode. | `app/capture.py`, `app/capture_signals.py` |
 | 6. Layer 3 analysis | HTML structure and DOM anomalies (login harvesters, wrappers), JS/network behavior, host/path reasoning (is this host shape suspicious? does the path fit?). | `app/html_*_signals.py`, `app/behavior_signals.py`, `app/host_path_reasoning.py` |
@@ -51,7 +51,7 @@ Entry point: `phishguard train` (default 50,000-row sample; `--full` for all row
 
 ## Part 4: Verified numbers
 
-`phishguard evaluate` reads a trained run and writes every number with its command, commit, data hash and environment: `metrics/results/evaluation.json` (raw), `metrics/VERIFIED_METRICS.md` (readable) and `docs/MODEL_CARD.md`. `metrics/reproduce.sh` retrains and re-evaluates from scratch (about 25 minutes). Only numbers from these files go on a resume or website. The pre-rebuild audit lives in `metrics/audit_baseline/` and must not be quoted for the current system.
+`phishguard evaluate` reads a trained run and writes every number with its command, commit, data hash and environment: `metrics/results/evaluation.json` (raw), `metrics/VERIFIED_METRICS.md` (readable) and `docs/MODEL_CARD.md`. `metrics/reproduce.sh` retrains and re-evaluates from scratch (about 25 minutes). `phishguard evaluate-live` (run by `.github/workflows/live-capture.yml`) adds the full system with live page capture. CI (`.github/workflows/ci.yml`) runs the tests, a CLI smoke test and a Docker build on every push. Only numbers from these files go on a resume or website. The pre-rebuild audit lives in `metrics/audit_baseline/` and must not be quoted for the current system.
 
 ## Part 5: Code map
 

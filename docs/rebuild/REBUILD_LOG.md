@@ -198,3 +198,28 @@ All in `metrics/VERIFIED_METRICS.md`. Highlights: XGBoost held-out F1 0.801 (95%
 - **Calibration currently hurts slightly.** The isotonic calibrator makes the test Brier score a bit worse (0.1408 raw vs 0.1455 calibrated). Open item: decide on validation data whether to keep it.
 - **The URL model alone is weak on famous sites.** Because every evaluation domain is removed from training, the model never sees google.com or amazon.com as legitimate, and Layer 1 flags them. The adjudication layer (which also has the official-domain registry) keeps them out of phishing verdicts. The in-browser demo (Phase 6) must show both layers, not the URL score alone.
 - **Without live capture, the dashboard is cautious**: it detects 24.3% of PhishStats URLs as `likely_phishing` and sends the rest to `uncertain`, with 0 false phishing verdicts on official brand URLs. Live capture (Phase 4) is what can move `uncertain` cases either way.
+
+---
+
+## 2026-09-30 · Phase 4: CI and live-capture evaluation (built; first live run pending)
+
+**Goal.** Measure what could not be measured in a sandbox without internet: the full system with real page capture, the legitimacy-rescue layer's effect, full-path latency and the live edge-case suite. And get a CI badge that proves the tests pass on every push.
+
+### What was built
+
+- **`.github/workflows/ci.yml`** runs on every push and pull request:
+  - installs the project and runs the full test suite with coverage (golden-output and pipeline-guard tests included);
+  - smoke-tests the `phishguard analyze` command with the shipped model;
+  - builds the Docker image and runs one analysis inside it (the image could not be built in the earlier sandbox).
+- **`phishguard evaluate-live`** (`evaluation/live.py`) captures each page **once** with Playwright, then runs the full analysis **twice** on that capture, with the legitimacy-rescue layer on and off. Same pages, same moment, so the difference is only the rescue layer. URL sets: the 15 live edge cases (now in `data/evaluation/eal_edge_cases.json` with their expected outcomes), the 18 suite URLs, 15 hard-legit URLs, the 136 official brand test-half URLs, the newest PhishStats phishing URLs at run time, and a seeded sample of popular legitimate homepages. It reports pass rates, capture-failure rates (phishing pages are often taken down within hours), the rescue on/off difference and full-path latency, then adds a live-capture section to `metrics/VERIFIED_METRICS.md`.
+- **`.github/workflows/live-capture.yml`** runs that evaluation on a GitHub runner. It runs when started by hand from the Actions tab (with options), and once automatically when the evaluator itself changes on this branch; that run commits its results back so they can be reviewed. It is deliberately not on a timer (next point).
+- **The verified model now ships in the repo** (`models/layer1/`, 14.6 MB, with `MANIFEST.json`: file hashes, training commit, training-data hash). The app loads `outputs/models/` if you trained your own and otherwise uses the shipped model, so a fresh clone, CI and the Docker image all run the evaluated model. The Random Forest file was re-saved compressed to fit GitHub's size limits (same fitted object).
+
+### Found along the way
+
+- **Capture types a dummy login.** On any page with a username and password field, capture fills `test.user@example.com` / a fake password and submits once, to see where credentials go. That is useful on phishing pages but it also sends failed logins to real sites (LinkedIn, PayPal, bank logins in the evaluation sets). Kept as the default (it is how the system was designed and measured), but there is now a switch, `PHISH_ENABLE_LOGIN_INTERACTION=false`, and the live workflow has a matching option. This is also why the live evaluation does not run on a schedule.
+- **Capture folder name.** The Phase 2 import rewrite turned the capture output folder `captures/app_v1` into `captures/phishguard.app`. Now `captures/app`.
+- **A failed capture can push toward phishing.** In a smoke test where the browser could not start, even `example.com` came out `likely_phishing`, because the system treats "could not see the page" plus a high URL score as suspicious. The live run reports pass rates both overall and for successfully captured pages only, so this effect is visible rather than hidden.
+
+### Still to do in Phase 4
+- The first live run happens when this branch is pushed. Its numbers go in the log and in `metrics/VERIFIED_METRICS.md`.

@@ -12,7 +12,7 @@ from typing import Any, Dict
 class PipelineConfig:
     """Runtime configuration for the triage pipeline."""
 
-    output_dir: str = "captures/phishguard.app"
+    output_dir: str = "captures/app"
     model_name: str = "gpt-4.1"
     navigation_timeout_ms: int = 30000
     # After navigation, wait briefly so JS-heavy pages can render before capture.
@@ -21,6 +21,10 @@ class PipelineConfig:
     post_submit_stabilize_ms: int = 3000
     # Optional safe click probe (no typing) to reveal post-click redirects.
     enable_click_probe: bool = False
+    # Capture types a dummy email/password (test.user@example.com) into login forms and submits once,
+    # to see where credentials would go. On by default (original behavior); set
+    # PHISH_ENABLE_LOGIN_INTERACTION=false to only observe pages.
+    enable_login_interaction: bool = True
     wait_until: str = "domcontentloaded"
     fixed_viewport_width: int = 390
     fixed_viewport_height: int = 844
@@ -57,6 +61,8 @@ class PipelineConfig:
                 os.getenv("PHISH_POST_SUBMIT_STABILIZE_MS", str(cls.post_submit_stabilize_ms))
             ),
             enable_click_probe=os.getenv("PHISH_ENABLE_CLICK_PROBE", "false").strip().lower() in {"1", "true", "yes", "on"},
+            enable_login_interaction=os.getenv("PHISH_ENABLE_LOGIN_INTERACTION", "true").strip().lower()
+            in {"1", "true", "yes", "on"},
             wait_until=os.getenv("PHISH_WAIT_UNTIL", cls.wait_until),
             legitimacy_rescue_enabled=os.getenv("PHISH_LEGITIMACY_RESCUE_ENABLED", "true").strip().lower()
             in {"1", "true", "yes", "on"},

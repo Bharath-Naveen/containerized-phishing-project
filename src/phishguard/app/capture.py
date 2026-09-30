@@ -396,6 +396,8 @@ def _run_optional_login_interaction(
 ) -> CaptureInteractionMetadata:
     """Best-effort dummy login interaction; never raises."""
     meta = CaptureInteractionMetadata()
+    if not getattr(cfg, "enable_login_interaction", True):
+        return meta
     try:
         with _capture_step(logger, STEP_INTERACTION_LOCATE, last_step):
             user_loc = _find_user_input(page)

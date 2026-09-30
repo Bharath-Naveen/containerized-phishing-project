@@ -38,6 +38,40 @@ def _headline(r: Dict[str, Any]) -> Dict[str, Any]:
             "dash": r["dashboard_ml_only"]["sets"]}
 
 
+def _load_live():
+    import json
+
+    from phishguard.paths import project_root
+
+    p = project_root() / "metrics" / "results" / "live_capture.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+
+
+def live_section(lv: Dict[str, Any]) -> List[str]:
+    p = lv["provenance"]
+    L = ["", "## Full system with live page capture", "",
+         f"From `phishguard evaluate-live` (GitHub Actions, commit `{p['git_commit'][:10]}`, {p['generated_utc']}). "
+         f"Each page was captured once with Playwright and analyzed twice (legitimacy rescue on and off). "
+         f"Dummy login interaction: {'on' if lv.get('login_interaction') else 'off'}. Raw values: `metrics/results/live_capture.json`.", ""]
+    rows = []
+    for n, x in lv["per_set"].items():
+        v = x["verdicts"]
+        rows.append([n, x["n"], f"{x['capture_ok']} ({pct(1 - x['capture_failure_rate']) if x['capture_failure_rate'] is not None else 'n/a'})",
+                     v["likely_phishing"], v["uncertain"], v["likely_legitimate"], pct(x["pass_rate"]), pct(x["pass_rate_capture_ok_only"]),
+                     f"{x['likely_phishing_rescue_on']} / {x['likely_phishing_rescue_off']} ({x['rescue_changed_verdicts']} changed)"])
+    L += _table(["Set", "URLs", "Captured OK", "likely_phishing", "uncertain", "likely_legitimate", "Pass rate", "Pass rate (captured OK)",
+                 "likely_phishing with rescue on / off"], rows)
+    lat = lv["latency_seconds_full_path"]
+    L += ["", "Pass means: legitimate sets not labeled likely_phishing; phishing sets labeled likely_phishing; the edge cases follow their own expected outcome (`data/evaluation/eal_edge_cases.json`). "
+          "Live phishing pages are often already taken down, so check the captured-OK column before reading a phishing pass rate.", "",
+          f"Full-path latency (capture + analysis): p50 {lat['p50']:.1f} s, p95 {lat['p95']:.1f} s over {lat['n']} URLs ({lat['note']}).", ""]
+    if lv.get("edge_case_failures"):
+        L += ["Edge cases that did not pass:", ""]
+        L += _table(["URL", "Expected", "Verdict", "Captured OK"], [[f"`{x['url']}`", x["expected"], x.get("verdict"), x.get("capture_ok")] for x in lv["edge_case_failures"]])
+        L += [""]
+    return L
+
+
 def render_verified(r: Dict[str, Any]) -> str:
     p = r["provenance"]
     env = p["environment"]
@@ -132,8 +166,12 @@ def render_verified(r: Dict[str, Any]) -> str:
         ["Layer 1 only (features + model + calibration)", f"{lat['layer1_only']['p50']:.1f} ms", f"{lat['layer1_only']['p95']:.1f} ms", f"{lat['n_urls']} held-out URLs; {lat['hardware']}; {lat['note']}"],
         ["Dashboard, ML-only (all rules + EAL)", f"{lat['dashboard_ml_only_incl_eal']['p50']:.1f} ms", f"{lat['dashboard_ml_only_incl_eal']['p95']:.1f} ms", "same URLs"],
     ])
-    L += ["", "## Not run here", ""]
-    L += _table(["Item", "Why"], [[x["item"], x["reason"]] for x in r["not_run"]])
+    live = _load_live()
+    if live:
+        L += live_section(live)
+    else:
+        L += ["", "## Not run here", ""]
+        L += _table(["Item", "Why"], [[x["item"], x["reason"]] for x in r["not_run"]])
     L += ["", "## Earlier baseline", "",
           "The pre-rebuild audit (leaky split, scheme artifact, stale calibrator) is kept for comparison in `metrics/audit_baseline/` and at git tag `audit-baseline-2026-09-29`. Its numbers describe the old code and must not be quoted for the current system.", ""]
     return "\n".join(L)
