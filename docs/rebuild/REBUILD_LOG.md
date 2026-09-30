@@ -150,3 +150,20 @@ While checking for undefined names, a latent bug surfaced: the full (non-Layer-1
 ### Still open after Phase 2
 - `phishguard evaluate` currently runs the URL-suite benchmark only; Phase 3 turns it into the single reproducible evaluation command.
 - The `metrics/` audit scripts now import the new package, so running them on this branch measures the new code. The "before" numbers stay pinned to tag `audit-baseline-2026-09-29`.
+
+---
+
+## 2026-09-30 · Phase 3: Retrain and evaluate (in progress)
+
+### Pre-registered decision: Tranco legitimate homepages (written before seeing any result)
+
+The URL model flags about a third of real official brand URLs as phishing, because the Kaggle legitimate rows look little like modern official sites. One candidate fix is to add homepages of popular real domains from a pinned Tranco list (list `K9QPW`, generated 2026-09-01, sha256 `611a342b...`) as extra legitimate training rows.
+
+To avoid picking whichever version happens to look best on the test set, the rule is fixed now, before either run is evaluated:
+
+- Train two full runs with identical settings (seed 42): **A** Kaggle only, **B** Kaggle plus the top **20,000** Tranco homepages.
+- Compare them on **validation data only** (never the test set, never PhishStats):
+  1. false-alarm rate of the selected model on the **validation half** of the official brand URLs, and
+  2. PR-AUC on the **Kaggle-origin rows** of the domain-grouped validation split.
+- **Adopt B only if** it lowers (1) by at least **5 percentage points** and does not lower (2) by more than **0.01**. Otherwise keep A.
+- Whichever wins is then evaluated once with `phishguard evaluate`. Both runs' validation numbers are reported here either way.

@@ -146,6 +146,8 @@ def run_kaggle_pipeline(
     fresh_weight: float = 0.25,
     primary_selection: str = "validated",
     write_primary_artifact: bool = True,
+    extra_legit_tranco: int = 0,
+    tranco_list_id: str = "K9QPW",
 ) -> None:
     ensure_layout()
     logger.info("=== kaggle_ingest ===")
@@ -311,10 +313,24 @@ def run_kaggle_pipeline(
         )
         logger.info("Sample stats: %s", json.dumps(sstats, indent=2))
 
+    _pre = pd.read_csv(enrich_input, dtype=str, low_memory=False)
+
+    # Optional extra legitimate homepages from a pinned Tranco list (rebuild Phase 3 experiment).
+    if extra_legit_tranco and extra_legit_tranco > 0:
+        from phishguard.data.tranco import tranco_rows
+
+        tr_df, tr_stats = tranco_rows(extra_legit_tranco, list(_pre.columns), list_id=tranco_list_id)
+        existing = set(_pre["canonical_url"].astype(str))
+        tr_df = tr_df[~tr_df["canonical_url"].astype(str).isin(existing)]
+        tr_stats["rows_added_after_dedupe"] = int(len(tr_df))
+        _pre = pd.concat([_pre, tr_df], ignore_index=True)
+        manifest["tranco_augment"] = tr_stats
+        run_context["tranco_augment"] = tr_stats
+        logger.info("Tranco augment: %s", tr_stats)
+
     # Evaluation hygiene (rebuild Phase 1): evaluation URLs never enter training.
     from phishguard.data.eval_sets import drop_evaluation_rows
 
-    _pre = pd.read_csv(enrich_input, dtype=str, low_memory=False)
     _kept, excl_stats = drop_evaluation_rows(_pre)
     _kept.to_csv(enrich_input, index=False)
     manifest["evaluation_exclusions"] = excl_stats
@@ -455,6 +471,13 @@ def main() -> None:
         help="Ignore Layer-1 checkpoint and recompute all features for this sample.",
     )
     ap.add_argument(
+        "--extra-legit-tranco",
+        type=int,
+        default=0,
+        help="Add homepages of the top N domains of a pinned Tranco list as extra legitimate rows (0 = off).",
+    )
+    ap.add_argument("--tranco-list-id", default="K9QPW", help="Pinned Tranco list ID (default: 2026-09-01 list).")
+    ap.add_argument(
         "--checkpoint-every",
         type=int,
         default=None,
@@ -518,6 +541,8 @@ def main() -> None:
         fresh_weight=args.fresh_weight,
         primary_selection=args.primary_selection,
         write_primary_artifact=not args.no_write_primary,
+        extra_legit_tranco=args.extra_legit_tranco,
+        tranco_list_id=args.tranco_list_id,
     )
 
 

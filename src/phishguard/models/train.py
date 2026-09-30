@@ -408,11 +408,17 @@ def train(
         tr_idx, val_idx = next(sgkf.split(np.zeros(len(y_train)), y_train, g_train))
         X_tr, X_val = X_train.iloc[tr_idx].reset_index(drop=True), X_train.iloc[val_idx].reset_index(drop=True)
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
+        if "source_dataset" in full.columns:
+            src_train = full.loc[is_train, "source_dataset"].fillna("").astype(str).values
+            val_is_kaggle = np.char.startswith(src_train[val_idx].astype(str), "kaggle")
     else:
         X_tr, X_val, y_tr, y_val = train_test_split(
             X_train, y_train, test_size=val_size, random_state=random_state,
             stratify=y_train if len(np.unique(y_train)) > 1 else None,
         )
+
+    if "val_is_kaggle" not in locals():
+        val_is_kaggle = None
 
     # Train/serve parity guard: stored features must equal what the app computes for the same URL.
     from phishguard.guards import check_feature_parity
@@ -516,7 +522,7 @@ def train(
         logger.info("Fitting %s …", name)
         pipe.fit(X_tr, y_tr)
         m = _evaluate(name, pipe, X_test, y_test)
-        m.update(_validation_metrics(pipe, X_val, y_val, official_val))
+        m.update(_validation_metrics(pipe, X_val, y_val, official_val, kaggle_mask=val_is_kaggle))
         try:
             m["audit_official_https_mean_phish_proba"] = _audit_official_https_mean_phish(pipe, list(X.columns))
         except Exception as ex:
@@ -703,7 +709,9 @@ def _official_brand_frame(feature_columns: List[str], num_cols: List[str], *, sp
     return X
 
 
-def _validation_metrics(pipe: Pipeline, X_val: pd.DataFrame, y_val: np.ndarray, official_val: Any) -> Dict[str, Any]:
+def _validation_metrics(
+    pipe: Pipeline, X_val: pd.DataFrame, y_val: np.ndarray, official_val: Any, kaggle_mask: Any = None
+) -> Dict[str, Any]:
     from sklearn.metrics import average_precision_score
 
     out: Dict[str, Any] = {}
@@ -714,6 +722,9 @@ def _validation_metrics(pipe: Pipeline, X_val: pd.DataFrame, y_val: np.ndarray, 
         out["val_pr_auc"] = float(average_precision_score(y_val, pv))
         out["val_roc_auc"] = float(roc_auc_score(y_val, pv))
         out["val_f1"] = float(f1_score(y_val, (pv >= 0.5).astype(int), zero_division=0))
+        if kaggle_mask is not None and 0 < int(np.sum(kaggle_mask)) < len(y_val):
+            # Comparable across runs that add non-Kaggle rows (for example Tranco homepages).
+            out["val_pr_auc_kaggle_rows"] = float(average_precision_score(y_val[kaggle_mask], pv[kaggle_mask]))
     except Exception as ex:
         logger.warning("validation metrics failed: %s", ex)
     if official_val is not None and len(official_val):
