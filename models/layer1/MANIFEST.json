@@ -1,0 +1,41 @@
+{
+  "description": "The verified Layer-1 model the app ships. Trained and evaluated by metrics/reproduce.sh; numbers in metrics/VERIFIED_METRICS.md. The app loads outputs/models/ if you trained your own, otherwise these.",
+  "primary_model": "xgboost",
+  "selection_policy": "validated",
+  "bundle_created_utc": "2026-09-30T08:14:11+00:00",
+  "train_csv_sha256": "c70ccdbc171e6b1ee026db12908c7178a2f8bd13d75ea5e4326453cad43bce0f",
+  "trained_at_commit": "be39bd122e41c8bc3cc2cef4126d3ffcaea460d3",
+  "evaluation": "metrics/results/evaluation.json",
+  "random_forest_note": "random_forest.joblib re-saved with joblib compress=3 to fit repo size limits; same fitted object",
+  "files": {
+    "layer1_bundle.joblib": {
+      "sha256": "9758fb0f13fd6cbe869d6ae6021314c3c89d7693fb9eedb36bc90499c9fa0a70",
+      "bytes": 809290
+    },
+    "layer1_primary.joblib": {
+      "sha256": "562d8436541cfd7b61c12489bfaff52704da21c26cf813436f58c02b3a6e11c4",
+      "bytes": 804548
+    },
+    "layer1_probability_calibrator.joblib": {
+      "sha256": "d0bd076c8f12cea52044f86c3ede6d6513ec0e57429d93d4602c9bb819de97b9",
+      "bytes": 2638
+    },
+    "lightgbm.joblib": {
+      "sha256": "581069021a8cdc812fe31cd93d7608b6970191106c9e9e01feac12a9d5d9764b",
+      "bytes": 724956
+    },
+    "logistic_regression.joblib": {
+      "sha256": "40bc8da046650bf9aae77dfd2d3e804ea9f0b620eb0aebdb9989402e664685e8",
+      "bytes": 9207
+    },
+    "random_forest.joblib": {
+      "sha256": "0aec1fa9e06d6b2a7b59bd713e95badf57e785ded00e097539ae530a6eaaf1d3",
+      "bytes": 11403503
+    },
+    "xgboost.joblib": {
+      "sha256": "562d8436541cfd7b61c12489bfaff52704da21c26cf813436f58c02b3a6e11c4",
+      "bytes": 804548
+    }
+  },
+  "security_note": "joblib files are Python pickles: only load models from sources you trust."
+}

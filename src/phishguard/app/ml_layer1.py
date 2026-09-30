@@ -200,7 +200,7 @@ def compute_layer1_model_agreement(
         X = X_raw
 
     for logical_name, fname in _AGREEMENT_MODEL_FILES:
-        path = models_dir() / fname
+        path = runtime_models_dir() / fname
         if not path.is_file():
             continue
         try:
@@ -228,8 +228,23 @@ def compute_layer1_model_agreement(
     return build_model_agreement_from_outputs(model_outputs, ml_primary_prob=ml_primary, primary_ml=primary_ml)
 
 
+def runtime_models_dir() -> Path:
+    """Where the app loads models from.
+
+    outputs/models (a model you trained yourself) wins; otherwise the verified model shipped in the
+    repo under models/layer1/ (see models/layer1/MANIFEST.json), so a fresh clone works out of the box.
+    """
+    trained = models_dir()
+    if (trained / "layer1_bundle.joblib").is_file() or (trained / "layer1_primary.joblib").is_file():
+        return trained
+    from phishguard.paths import project_root
+
+    shipped = project_root() / "models" / "layer1"
+    return shipped if (shipped / "layer1_bundle.joblib").is_file() else trained
+
+
 def _bundle_path() -> Path:
-    return models_dir() / "layer1_bundle.joblib"
+    return runtime_models_dir() / "layer1_bundle.joblib"
 
 
 def load_layer1_bundle() -> Optional[Dict[str, Any]]:
@@ -250,14 +265,14 @@ def load_layer1_bundle() -> Optional[Dict[str, Any]]:
 
 
 def _default_model_path() -> Path:
-    p = models_dir() / "layer1_primary.joblib"
+    p = runtime_models_dir() / "layer1_primary.joblib"
     if p.is_file():
         return p
-    return models_dir() / "logistic_regression.joblib"
+    return runtime_models_dir() / "logistic_regression.joblib"
 
 
 def _calibrator_path() -> Path:
-    return models_dir() / "layer1_probability_calibrator.joblib"
+    return runtime_models_dir() / "layer1_probability_calibrator.joblib"
 
 
 def _load_probability_calibrator() -> Optional[Dict[str, Any]]:

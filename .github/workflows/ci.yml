@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -r requirements.txt "pytest-cov>=5"
+          pip install -e .
+      - name: Run tests (includes golden-output and pipeline-guard tests)
+        env:
+          PYTHONHASHSEED: "42"
+        run: pytest -p no:cacheprovider --cov=src/phishguard --cov-report=term-missing:skip-covered
+      - name: Smoke test the CLI with the shipped model
+        run: |
+          phishguard analyze --url "https://totally-fake-bank-login.xyz/verify" --no-reinforcement > out.json
+          python -c "import json; d=json.load(open('out.json')); print(d['verdict']['verdict_3way'], d['layer1_ml']['phish_proba'])"
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t phishguard:ci .
+      - name: Run one analysis inside the image
+        run: docker run --rm phishguard:ci python -m phishguard analyze --url "https://example.com/" --no-reinforcement | head -c 600

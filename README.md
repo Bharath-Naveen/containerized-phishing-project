@@ -1,5 +1,7 @@
 # Containerized Phishing Detection Dashboard
 
+[![CI](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml/badge.svg)](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml)
+
 Layered phishing detection dashboard combining ML triage and deterministic evidence review for explainable, deployment-ready decisions.
 
 ## Project Goal
@@ -53,7 +55,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .            # installs the `phishguard` command
-phishguard serve            # Streamlit dashboard on http://localhost:8501
+phishguard serve            # Streamlit dashboard on http://localhost:8501 (uses the verified model in models/layer1/)
 ```
 
 One command for everything:
@@ -61,7 +63,8 @@ One command for everything:
 ```powershell
 phishguard analyze --url "https://example.com"   # score one URL (add --no-reinforcement for ML-only)
 phishguard train                                 # train on a 50K stratified Kaggle sample (--full for all rows)
-phishguard evaluate                              # curated URL-suite benchmark
+phishguard evaluate                              # every verified metric + model card (after phishguard train)
+phishguard evaluate-live                         # full system with live page capture (needs internet; runs in GitHub Actions)
 phishguard deploy                                # ship the latest trained model bundle
 ```
 
@@ -137,7 +140,9 @@ Layer-1 URL model, trained on the full Kaggle dataset (794,563 deduplicated URLs
 ├── tests/             # unit, regression and golden-output tests
 ├── metrics/           # verified, reproducible metrics (see Results)
 ├── docs/rebuild/      # how it works + rebuild log
+├── models/layer1/     # the verified model the app ships (MANIFEST.json has hashes and provenance)
 ├── data/              # evaluation sets + registries (tracked); raw/processed data (gitignored)
+├── .github/workflows/ # CI (tests + Docker build) and the live-capture evaluation
 ├── archive/legacy/    # retired AI adjudication path and old scripts
 ├── Dockerfile, docker-compose.yml, pyproject.toml
 └── README.md

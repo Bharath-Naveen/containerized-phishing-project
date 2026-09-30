@@ -13,6 +13,8 @@ COPY src/ ./src/
 COPY data/official_domains.json ./data/official_domains.json
 COPY data/reference/ ./data/reference/
 COPY data/evaluation/ ./data/evaluation/
+# The verified model shipped with the repo (see models/layer1/MANIFEST.json).
+COPY models/layer1/ ./models/layer1/
 
 # The phishguard package lives in /app/src.
 ENV PYTHONPATH=/app/src
