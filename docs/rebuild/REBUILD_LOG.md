@@ -273,3 +273,9 @@ The new and most important finding is **recall on fresh phishing is low**. The U
 - A few feed entries are not phishing pages at all by the time of capture: real login or captcha pages the phish redirected to (yandex.ru captcha, id.superhuman.com, login.account.rakuten.com, att.com). Feed labels are "reported as phishing", not ground truth.
 
 What this means for claims: the full system's value today is **low false alarms on real brand sites** (8 of 136 flagged), not catching fresh phishing. "Catches X% of live phishing" cannot be claimed. Any tuning must be judged on both sides at once: fewer false alarms on legitimate login pages *and* no further loss of fresh-phishing recall.
+## 2026-09-30 · Phase 4b: rule tuning, step 1 (plan and frozen data)
+
+- **The tuning rules were written down before any tuning**: `docs/rebuild/TUNING_PLAN.md` fixes the data, the label hygiene, what code may change (rules only; no allowlisting evaluation sites, no model changes), the keep/reject rule, and that the test split is scored once.
+- **Frozen snapshot tooling.** `phishguard snapshot-live` (workflow `live-snapshot.yml`) captures every evaluation URL once and commits the capture records plus page HTML as one gzipped file. `phishguard replay --split val|test|all` runs the full analysis on those saved captures with no network, so before/after numbers compare the same pages. Every test-split replay is logged to `metrics/results/test_access_log.jsonl`.
+- **One amendment made before any capture**: a dry run of URL selection showed that grouping fresh phishing by registered domain would collapse every godaddysites.com / sharepoint.com page into one, so grouping and the "popular site" exclusion use the host instead. Recorded in the plan.
+- Tests: 370 pass (new `tests/test_snapshot.py` freezes two fake captures and checks two replays give identical verdicts).

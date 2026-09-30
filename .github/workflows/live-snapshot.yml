@@ -1,0 +1,64 @@
+name: Live capture snapshot
+
+# Captures every evaluation URL once and commits the capture records + page HTML as one gzipped file
+# under data/evaluation/frozen/. Rule tuning then replays that file offline (`phishguard replay`), so
+# every before/after number is measured on the same pages. See docs/rebuild/TUNING_PLAN.md.
+# Capture submits a dummy login (test.user@example.com) on login forms, as the app does.
+
+on:
+  push:
+    branches: [rebuild/verified-metrics]
+    paths:
+      - .github/workflows/live-snapshot.yml
+      - src/phishguard/evaluation/snapshot.py
+  workflow_dispatch:
+    inputs:
+      phishing:
+        description: "Fresh phishing URLs (one per host)"
+        default: "240"
+      tranco:
+        description: "Popular legitimate homepages"
+        default: "160"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install app and Chromium
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+          python -m playwright install --with-deps chromium
+      - name: Capture and save
+        env:
+          PYTHONHASHSEED: "42"
+          PHISH_ENABLE_LOGIN_INTERACTION: "true"
+          PHISH_OUTPUT_DIR: ${{ runner.temp }}/captures
+          PHISH_NAV_TIMEOUT_MS: "20000"
+        run: phishguard snapshot-live --phishing "${{ inputs.phishing || '240' }}" --tranco "${{ inputs.tranco || '160' }}"
+      - name: Upload snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-snapshot
+          path: data/evaluation/frozen/*.jsonl.gz
+      - name: Commit snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash
+          git add data/evaluation/frozen/*.jsonl.gz
+          git commit -m "Frozen live-capture snapshot (GitHub Actions run ${{ github.run_id }})" || echo "nothing to commit"
+          git push

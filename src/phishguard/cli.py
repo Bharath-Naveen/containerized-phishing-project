@@ -4,6 +4,8 @@
     phishguard analyze   --url URL [--no-reinforcement]                score one URL, print JSON
     phishguard evaluate  [--with-tests]                                  measure a trained run; writes verified metrics + model card
     phishguard evaluate-live [--phishstats N] [--tranco N]              full system with live Playwright capture (needs internet)
+    phishguard snapshot-live [--phishing N] [--tranco N]               capture every eval URL once and save it (needs internet)
+    phishguard replay    [--split val|test|all]                         replay a saved snapshot through the full analysis (offline)
     phishguard deploy    [...]                                          copy a trained run's model bundle into outputs/models
     phishguard serve     [--port 8501]                                  start the Streamlit dashboard
 
@@ -22,6 +24,8 @@ COMMANDS = {
     "analyze": ("phishguard.app.dashboard", "Score one URL and print the analysis JSON"),
     "evaluate": ("phishguard.evaluation.evaluate", "Measure a trained run: every verified metric + model card"),
     "evaluate-live": ("phishguard.evaluation.live", "Full system with live page capture (needs internet; runs in CI)"),
+    "snapshot-live": ("phishguard.evaluation.snapshot:main_freeze", "Capture every evaluation URL once and save it (needs internet)"),
+    "replay": ("phishguard.evaluation.snapshot:main_replay", "Replay a saved live snapshot through the full analysis (offline)"),
     "deploy": ("phishguard.models.deploy", "Deploy the latest selected model bundle"),
     "serve": (None, "Start the Streamlit dashboard"),
 }
@@ -29,7 +33,7 @@ COMMANDS = {
 
 def _usage() -> str:
     lines = ["usage: phishguard <command> [options]", "", "commands:"]
-    lines += [f"  {k:<9} {v[1]}" for k, v in COMMANDS.items()]
+    lines += [f"  {k:<13} {v[1]}" for k, v in COMMANDS.items()]
     return "\n".join(lines)
 
 
@@ -51,9 +55,10 @@ def main(argv: list[str] | None = None) -> int:
                                 "--server.address=0.0.0.0", f"--server.port={port}"])
     import importlib
 
-    module = importlib.import_module(COMMANDS[cmd][0])
+    mod_name, _, func = COMMANDS[cmd][0].partition(":")
+    module = importlib.import_module(mod_name)
     sys.argv = [f"phishguard {cmd}", *rest]
-    module.main()
+    getattr(module, func or "main")()
     return 0
 
 

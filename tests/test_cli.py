@@ -17,4 +17,5 @@ def test_subcommand_modules_import():
 
     for cmd, (module, _) in COMMANDS.items():
         if module:
-            assert hasattr(importlib.import_module(module), "main"), cmd
+            mod, _, func = module.partition(":")
+            assert hasattr(importlib.import_module(mod), func or "main"), cmd
