@@ -2,7 +2,7 @@
 
     phishguard train     [--sample-size N | --full] [--seed 42] ...   train Layer-1 models (Kaggle pipeline)
     phishguard analyze   --url URL [--no-reinforcement]                score one URL, print JSON
-    phishguard evaluate  [...]                                          URL-suite benchmark (full evaluation arrives in Phase 3)
+    phishguard evaluate  [--with-tests]                                  measure a trained run; writes verified metrics + model card
     phishguard deploy    [...]                                          copy a trained run's model bundle into outputs/models
     phishguard serve     [--port 8501]                                  start the Streamlit dashboard
 
@@ -19,7 +19,7 @@ from pathlib import Path
 COMMANDS = {
     "train": ("phishguard.pipelines.kaggle", "Train Layer-1 models on the Kaggle data"),
     "analyze": ("phishguard.app.dashboard", "Score one URL and print the analysis JSON"),
-    "evaluate": ("phishguard.evaluation.url_suites", "Benchmark the curated URL suites"),
+    "evaluate": ("phishguard.evaluation.evaluate", "Measure a trained run: every verified metric + model card"),
     "deploy": ("phishguard.models.deploy", "Deploy the latest selected model bundle"),
     "serve": (None, "Start the Streamlit dashboard"),
 }

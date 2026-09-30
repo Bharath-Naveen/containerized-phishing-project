@@ -95,7 +95,10 @@ def enrich(
     checkpoint_name: str = "enriched_features.csv",
 ) -> Path:
     ensure_layout()
-    ck_every = checkpoint_every if checkpoint_every is not None else (400 if layer1_only else 25)
+    # Layer-1 enrichment is pure URL parsing (~5,000 rows/s). Rewriting the whole checkpoint CSV
+    # every 400 rows made cost grow quadratically ("--full takes many hours"); every 50,000 rows
+    # keeps resumability at a tiny fraction of the cost (full run: ~3 minutes). Output is identical.
+    ck_every = checkpoint_every if checkpoint_every is not None else (50_000 if layer1_only else 25)
     in_path = cleaned_csv or (processed_dir() / "cleaned.csv")
     base = pd.read_csv(in_path, dtype=str, low_memory=False)
     if base.empty:

@@ -458,7 +458,7 @@ def main() -> None:
         "--checkpoint-every",
         type=int,
         default=None,
-        help="Override enrich checkpoint interval (default 400 for layer1).",
+        help="Override enrich checkpoint interval (default 50,000 rows for layer1).",
     )
     ap.add_argument(
         "--use-fresh-data",
