@@ -4,10 +4,8 @@ Split out of the former analyze_dashboard.py in rebuild Phase 2 (code moved unch
 """
 
 from __future__ import annotations
-import html as html_lib
-import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 from phishguard.features.brand_signals import host_on_official_brand_apex
 from .verdict_policy import Verdict3WayConfig, verdict_3way
 from .domain_utils import (
@@ -19,18 +17,6 @@ from .domain_utils import (
 from .registries import (
     _load_official_domain_trust_prior_registry,
 )
-
-
-_EMAIL_IN_URL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
-
-
-def _victim_email_in_url(url: str) -> bool:
-    """True when an email address appears in the query string or fragment (not the host or path)."""
-    try:
-        parts = urlparse(html_lib.unescape(unquote(url)))
-    except ValueError:
-        return False
-    return bool(_EMAIL_IN_URL.search(f"{parts.query}#{parts.fragment}"))
 
 
 def _apply_evidence_adjudication_layer(
@@ -301,10 +287,6 @@ def _apply_evidence_adjudication_layer(
         int(hs.get("password_input_count") or 0) > 0 or int(hs.get("form_count") or 0) > 0
     ):
         hard_blockers.append("network_exfiltration_with_credential_context")
-    # Victim email pre-filled in the submitted URL (query or fragment), a common phishing-link pattern,
-    # counted only when the URL model also leans phishing and the page is not a coherent first-party page.
-    if _victim_email_in_url(str(ml.get("canonical_url") or "")) and p >= 0.50 and not coherent_first_party:
-        hard_blockers.append("victim_email_prefilled_in_url")
 
     phish_signals: List[str] = []
     legit_signals: List[str] = []
