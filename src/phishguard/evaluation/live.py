@@ -12,8 +12,8 @@ URL sets
   url_suites         data/evaluation/url_suites.json (18 curated URLs)
   hard_legit         data/evaluation/hard_legit_urls.jsonl (15 tricky legitimate URLs)
   official_brand     test half of data/evaluation/official_brand_urls.jsonl (136)
-  phishstats_live    the newest phishing URLs from the PhishStats feed at run time (live, unseen)
-  tranco_live        a seeded sample of popular legitimate homepages (pinned Tranco list)
+  phishing_feed_live the newest phishing URLs at run time (PhishStats API, OpenPhish public feed as fallback)
+  tranco_live        a seeded sample of popular legitimate homepages (pinned Tranco list; non-resolving infrastructure domains skipped)
 
 Live sites change and phishing pages are taken down within hours, so capture failures are counted
 and reported separately; a verdict on a dead page is not a detection.
@@ -38,6 +38,36 @@ from phishguard.config import SEED
 from phishguard.paths import project_root
 
 
+SOURCES: Dict[str, Any] = {}
+
+
+def _fresh_phishing_urls(n: int) -> Tuple[List[str], Dict[str, Any]]:
+    """Newest phishing URLs: PhishStats API first, OpenPhish public feed as fallback. Records which worked."""
+    meta: Dict[str, Any] = {}
+    try:
+        from phishguard.data.fresh_collect import collect_phishstats
+
+        df, m = collect_phishstats(pages=max(1, n // 100 + 1), max_rows=n, return_meta=True)
+        meta["phishstats"] = m
+        if len(df):
+            meta["used"] = "phishstats"
+            return df["url"].astype(str).tolist(), meta
+    except Exception as e:  # noqa: BLE001
+        meta["phishstats_error"] = f"{type(e).__name__}: {e}"
+    try:
+        import urllib.request
+
+        url = "https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt"
+        with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310 (fixed https host)
+            lines = [ln.strip() for ln in r.read().decode("utf-8", "replace").splitlines() if ln.strip().startswith("http")]
+        meta.update({"used": "openphish_public_feed", "openphish_rows": len(lines), "openphish_url": url})
+        return lines[:n], meta
+    except Exception as e:  # noqa: BLE001
+        meta["openphish_error"] = f"{type(e).__name__}: {e}"
+    meta["used"] = None
+    return [], meta
+
+
 def _load_sets(n_phishstats: int, n_tranco: int) -> Dict[str, List[Dict[str, Any]]]:
     from phishguard.data.eval_sets import (
         evaluation_exclusions, load_hard_legit_rows, load_official_brand_rows, load_url_suites,
@@ -53,19 +83,17 @@ def _load_sets(n_phishstats: int, n_tranco: int) -> Dict[str, List[Dict[str, Any
         "official_brand": [{"url": r["url"], "expected": "not_phishing"} for r in load_official_brand_rows(split="test")],
     }
     if n_phishstats:
-        from phishguard.data.fresh_collect import collect_phishstats
-
-        df = collect_phishstats(pages=max(1, n_phishstats // 100 + 1), max_rows=n_phishstats * 3)
+        candidates, SOURCES["phishing_feed"] = _fresh_phishing_urls(n_phishstats * 3)
         urls = []
         seen_hosts = set()
-        for u in (df["url"].tolist() if len(df) and "url" in df.columns else []):
+        for u in candidates:
             h = str(u).split("//", 1)[-1].split("/", 1)[0].lower()
             if h and h not in seen_hosts:
                 seen_hosts.add(h)
                 urls.append(u)
             if len(urls) >= n_phishstats:
                 break
-        sets["phishstats_live"] = [{"url": u, "expected": "phishing"} for u in urls]
+        sets["phishing_feed_live"] = [{"url": u, "expected": "phishing"} for u in urls]
     if n_tranco:
         from phishguard.data.tranco import fetch_tranco
         from phishguard.urls.safe import leak_safe_group_key
@@ -75,7 +103,21 @@ def _load_sets(n_phishstats: int, n_tranco: int) -> Dict[str, List[Dict[str, Any
         excl = evaluation_exclusions()["domains"]
         doms = [d for d in doms if leak_safe_group_key(d)[0] not in excl]
         random.Random(SEED).shuffle(doms)
-        sets["tranco_live"] = [{"url": f"https://{d}/", "expected": "not_phishing"} for d in doms[:n_tranco]]
+        # Many top-ranked Tranco entries are infrastructure domains with no website (CDNs, ad and DNS
+        # hosts). Keep only domains whose name resolves, and record how many were skipped.
+        import socket
+
+        kept, skipped = [], 0
+        for d in doms:
+            if len(kept) >= n_tranco:
+                break
+            try:
+                socket.getaddrinfo(d, 443)
+                kept.append(d)
+            except OSError:
+                skipped += 1
+        SOURCES["tranco"] = {"list_id": "K9QPW", "sampled_from_top": 5000, "skipped_not_resolving": skipped}
+        sets["tranco_live"] = [{"url": f"https://{d}/", "expected": "not_phishing"} for d in kept]
     return sets
 
 
@@ -151,6 +193,7 @@ def run(n_phishstats: int = 60, n_tranco: int = 60, out: Path | None = None) -> 
         "provenance": provenance(),
         "command": "phishguard evaluate-live",
         "login_interaction": PipelineConfig.from_env().enable_login_interaction,
+        "sources": SOURCES,
         "per_set": per_set,
         "edge_case_failures": [{k: r.get(k) for k in ("url", "expected", "verdict", "capture_ok", "note")}
                                for r in rows if r["set"] == "eal_edge_cases" and not r.get("passes")],
@@ -174,7 +217,7 @@ def run(n_phishstats: int = 60, n_tranco: int = 60, out: Path | None = None) -> 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Full-system evaluation with live Playwright capture (needs internet).")
-    ap.add_argument("--phishstats", type=int, default=60, help="newest PhishStats URLs to test (0 = skip)")
+    ap.add_argument("--phishstats", type=int, default=60, help="newest phishing-feed URLs to test (0 = skip)")
     ap.add_argument("--tranco", type=int, default=60, help="popular legitimate homepages to test (0 = skip)")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args()

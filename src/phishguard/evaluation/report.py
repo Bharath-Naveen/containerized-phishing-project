@@ -61,6 +61,11 @@ def live_section(lv: Dict[str, Any]) -> List[str]:
                      f"{x['likely_phishing_rescue_on']} / {x['likely_phishing_rescue_off']} ({x['rescue_changed_verdicts']} changed)"])
     L += _table(["Set", "URLs", "Captured OK", "likely_phishing", "uncertain", "likely_legitimate", "Pass rate", "Pass rate (captured OK)",
                  "likely_phishing with rescue on / off"], rows)
+    src = lv.get("sources") or {}
+    feed = (src.get("phishing_feed") or {}).get("used")
+    tr = src.get("tranco") or {}
+    if src:
+        L += ["", f"Fresh phishing URLs came from: {feed or 'no feed reachable'}. Popular-homepage sample: Tranco list {tr.get('list_id')}, {tr.get('skipped_not_resolving', 0)} infrastructure domains without a website skipped."]
     lat = lv["latency_seconds_full_path"]
     L += ["", "Pass means: legitimate sets not labeled likely_phishing; phishing sets labeled likely_phishing; the edge cases follow their own expected outcome (`data/evaluation/eal_edge_cases.json`). "
           "Live phishing pages are often already taken down, so check the captured-OK column before reading a phishing pass rate.", "",

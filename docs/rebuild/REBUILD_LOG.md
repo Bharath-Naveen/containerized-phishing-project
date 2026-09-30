@@ -201,7 +201,7 @@ All in `metrics/VERIFIED_METRICS.md`. Highlights: XGBoost held-out F1 0.801 (95%
 
 ---
 
-## 2026-09-30 · Phase 4: CI and live-capture evaluation (built; first live run pending)
+## 2026-09-30 · Phase 4: CI and live-capture evaluation
 
 **Goal.** Measure what could not be measured in a sandbox without internet: the full system with real page capture, the legitimacy-rescue layer's effect, full-path latency and the live edge-case suite. And get a CI badge that proves the tests pass on every push.
 
@@ -221,5 +221,29 @@ All in `metrics/VERIFIED_METRICS.md`. Highlights: XGBoost held-out F1 0.801 (95%
 - **Capture folder name.** The Phase 2 import rewrite turned the capture output folder `captures/app_v1` into `captures/phishguard.app`. Now `captures/app`.
 - **A failed capture can push toward phishing.** In a smoke test where the browser could not start, even `example.com` came out `likely_phishing`, because the system treats "could not see the page" plus a high URL score as suspicious. The live run reports pass rates both overall and for successfully captured pages only, so this effect is visible rather than hidden.
 
-### Still to do in Phase 4
-- The first live run happens when this branch is pushed. Its numbers go in the log and in `metrics/VERIFIED_METRICS.md`.
+### First live run (GitHub Actions run 36749733710, commit `2b90195`)
+
+244 URLs, each captured once and analyzed twice. Full table in `metrics/VERIFIED_METRICS.md`; raw rows in `metrics/results/live_capture.json`.
+
+| What | Result |
+|---|---|
+| Official brand URLs (test half) | 134 of 136 captured; 102 `likely_legitimate`, 26 `uncertain`, **8 `likely_phishing` (5.9%)** |
+| Live edge cases | 13 of 15 pass |
+| Curated suites | 17 of 18 pass |
+| Full-path latency (capture + analysis) | p50 7.1 s, p95 16.1 s |
+| Legitimacy rescue on vs off | fired on 86 URLs, **changed 0 final verdicts** |
+| Fresh phishing URLs | **none tested**: the PhishStats API returned nothing from the GitHub runner |
+
+What it taught us (each is a real finding, not a tuning target yet):
+
+1. **The rescue layer adjusts scores but never changes a verdict.** It fired on 86 of 244 pages and the final verdict was identical every time, because the Evidence Adjudication Layer decides afterwards. So "the rescue layer reduces false positives" cannot be claimed. It is a candidate for simplification.
+2. **Legitimate login flows trip two hard blockers.** Of 14 false phishing verdicts on successfully captured legitimate pages, 9 came from `wrapper_or_interstitial_redirect_pattern` (Wells Fargo, Chase, Outlook, OneDrive sign-in redirects, plus news sites with consent walls) and 4 from `credential_harvesting_pattern` (Dropbox login, AWS console, Stripe dashboard login). These rules treat normal single-sign-on redirects and login forms as abuse.
+3. **A failed capture almost always becomes `likely_phishing`.** 19 of 20 legitimate URLs whose capture failed were labeled phishing, mostly infrastructure domains from the Tranco sample that have no website (DNS does not resolve) plus two sites that block headless browsers. "Could not see the page" plus a high URL score is treated as suspicious. That is defensible for unknown domains, but the label claims more certainty than the evidence gives.
+4. **Two Weebly phishing edge cases now come back `uncertain`.** The pages were captured, so either the pages changed since April or the rules drifted; it needs a look.
+
+Fixes made after this run:
+- **Fresh phishing URLs now have a fallback.** If PhishStats returns nothing, the evaluator uses the OpenPhish public feed and records which source was used.
+- **The popular-homepage sample skips domains that do not resolve** (infrastructure domains with no website) and reports how many were skipped, so the set measures real websites.
+- Pushing these changes re-runs the live workflow automatically.
+
+Not fixed on purpose: findings 1 to 3 are changes to the adjudication rules. Tuning them while looking at the official-brand **test** half would be tuning on the test set. The honest way is to tune on the **validation** half and confirm once on the test half; that is proposed as the next step.
