@@ -231,16 +231,25 @@ def compute_layer1_model_agreement(
 def runtime_models_dir() -> Path:
     """Where the app loads models from.
 
-    outputs/models (a model you trained yourself) wins; otherwise the verified model shipped in the
-    repo under models/layer1/ (see models/layer1/MANIFEST.json), so a fresh clone works out of the box.
+    outputs/models wins only when it holds a model bundle (layer1_bundle.joblib, written by the rebuilt
+    training pipeline); otherwise the verified model shipped in the repo under models/layer1/ (see
+    models/layer1/MANIFEST.json), so a fresh clone works out of the box.
+
+    A folder with only the old loose files (layer1_primary.joblib and friends, from before the rebuild)
+    is ignored with a warning. It used to win silently, which made a local checkout score URLs with a
+    stale model while CI used the shipped one.
     """
     trained = models_dir()
-    if (trained / "layer1_bundle.joblib").is_file() or (trained / "layer1_primary.joblib").is_file():
+    if (trained / "layer1_bundle.joblib").is_file():
         return trained
     from phishguard.paths import project_root
 
     shipped = project_root() / "models" / "layer1"
-    return shipped if (shipped / "layer1_bundle.joblib").is_file() else trained
+    if (shipped / "layer1_bundle.joblib").is_file():
+        if (trained / "layer1_primary.joblib").is_file():
+            logger.warning("Ignoring pre-rebuild model files in %s (no layer1_bundle.joblib); using %s", trained, shipped)
+        return shipped
+    return trained
 
 
 def _bundle_path() -> Path:

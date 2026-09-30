@@ -110,6 +110,22 @@ def _sha256(path: Path) -> Optional[str]:
 
 
 # --------------------------------------------------------------------------- provenance
+def _runtime_model() -> Dict[str, Any]:
+    """Which Layer 1 model file the app (dashboard, live and replay evaluation) actually loads."""
+    try:
+        from phishguard.app.ml_layer1 import runtime_models_dir
+
+        d = runtime_models_dir()
+        b = d / "layer1_bundle.joblib"
+        try:
+            rel = str(d.relative_to(project_root()))
+        except ValueError:
+            rel = str(d)
+        return {"dir": rel, "bundle_sha256": _sha256(b) if b.is_file() else None}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 def provenance() -> Dict[str, Any]:
     from importlib import metadata
 
@@ -142,6 +158,7 @@ def provenance() -> Dict[str, Any]:
         "git_dirty_tracked_files": bool(git("-c", "core.fileMode=false", "status", "--porcelain", "--untracked-files=no")),
         "code_trees": {p: git("rev-parse", f"HEAD:{p}") for p in ("src", "tests", "data/evaluation")},
         "seed": SEED,
+        "runtime_model": _runtime_model(),
         "environment": {"python": sys.version.split()[0], "os": f"{platform.system()} {platform.release()}",
                         "cpu": cpu, "cpu_count": os.cpu_count(), "gpu": "none (CPU only)", "packages": pkgs},
     }
