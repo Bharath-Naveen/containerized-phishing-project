@@ -4,8 +4,10 @@ Split out of the former analyze_dashboard.py in rebuild Phase 2 (code moved unch
 """
 
 from __future__ import annotations
+import html as html_lib
+import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from phishguard.features.brand_signals import host_on_official_brand_apex
 from .verdict_policy import Verdict3WayConfig, verdict_3way
 from .domain_utils import (
@@ -17,6 +19,18 @@ from .domain_utils import (
 from .registries import (
     _load_official_domain_trust_prior_registry,
 )
+
+
+_EMAIL_IN_URL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
+def _victim_email_in_url(url: str) -> bool:
+    """True when an email address appears in the query string or fragment (not the host or path)."""
+    try:
+        parts = urlparse(html_lib.unescape(unquote(url)))
+    except ValueError:
+        return False
+    return bool(_EMAIL_IN_URL.search(f"{parts.query}#{parts.fragment}"))
 
 
 def _apply_evidence_adjudication_layer(
@@ -167,13 +181,50 @@ def _apply_evidence_adjudication_layer(
     agr = ml.get("model_agreement") if isinstance(ml.get("model_agreement"), dict) else {}
     cons = str(agr.get("ml_consensus") or "")
 
+    # Coherent first-party page (rule tuning 2026-09, docs/rebuild/TUNING_PLAN.md): the brand the page shows
+    # matches the domain it is served from, the visit stayed on that registered domain, transport is valid
+    # HTTPS, and nothing posts or leaks off-site. Real sign-in flows (JS-submitted login forms, SSO
+    # redirects) look like this; the phishing pages the two blockers below catch did not.
+    coherent_first_party = bool(
+        same_registrable_domain
+        and bool(cap.get("brand_domain_coherence_match"))
+        # Other brands mentioned on the page (Apple Pay on a bank page) can raise a "mismatch" even when the
+        # title names the site's own domain. That is tolerated only when no brand sits in the host or
+        # path and the host does not carry a major brand name unless it is that brand's official domain.
+        and (
+            str(cap.get("brand_domain_mismatch_strength") or "none").lower() in {"none", "weak"}
+            or not bool(cap.get("brand_domain_mismatch"))
+            or (
+                not bool(cap.get("host_path_brand_context"))
+                and not bool(cap.get("brand_in_subdomain_or_path_but_not_registered_domain"))
+                and (not _contains_major_brand_token(final_host) or bool(host_on_official_brand_apex(final_host)))
+            )
+        )
+        and uses_https
+        and not tls_or_cert_error_detected
+        and not insecure_scheme_detected
+        and not bool(cap.get("password_input_external_action"))
+        and not bool(beh.get("network_exfiltration_suspected"))
+        and not security_block_page_detected
+        and not bool(cap.get("final_domain_is_free_hosting"))
+        and pctx_type not in {"user_hosted_subdomain", "cloud_hosted_brand_impersonation"}
+    )
+
+    coherent_js_login = False
     hard_blockers: List[str] = []
     if int(dom.get("form_action_external_domain_count") or 0) > 0 and int(hs.get("password_input_count") or 0) > 0:
         hard_blockers.append("cross_domain_credential_form_action")
     if bool(pctx.get("platform_context_type") == "cloud_hosted_brand_impersonation") or bool(out.get("cloud_hosted_brand_impersonation")):
         hard_blockers.append("cloud_hosted_brand_impersonation")
-    if bool(dom.get("suspicious_credential_collection_pattern") or dom.get("login_harvester_pattern")):
+    if bool(dom.get("login_harvester_pattern")):
         hard_blockers.append("credential_harvesting_pattern")
+    elif bool(dom.get("suspicious_credential_collection_pattern")):
+        # A password form with an empty action is how most modern sites submit (JavaScript), so on a
+        # coherent first-party page it is context, not proof.
+        if coherent_first_party:
+            coherent_js_login = True
+        else:
+            hard_blockers.append("credential_harvesting_pattern")
     official_like_host = bool(host_on_official_brand_apex(final_host)) or host_identity == "official_brand_auth"
     same_reg_domain = bool(
         str(cap.get("input_registered_domain") or "")
@@ -238,7 +289,8 @@ def _apply_evidence_adjudication_layer(
         )
     )
     if bool(dom.get("wrapper_page_pattern") or dom.get("interstitial_or_preview_pattern")):
-        if wrapper_official_authwall_safe or wrapper_clean_official_or_same_domain_safe or official_auth_same_domain_safe:
+        if (wrapper_official_authwall_safe or wrapper_clean_official_or_same_domain_safe
+                or official_auth_same_domain_safe or coherent_first_party):
             # Official first-party authwall/login wrappers are ambiguity context, not hard blockers.
             pass
         else:
@@ -249,6 +301,10 @@ def _apply_evidence_adjudication_layer(
         int(hs.get("password_input_count") or 0) > 0 or int(hs.get("form_count") or 0) > 0
     ):
         hard_blockers.append("network_exfiltration_with_credential_context")
+    # Victim email pre-filled in the submitted URL (query or fragment), a common phishing-link pattern,
+    # counted only when the URL model also leans phishing and the page is not a coherent first-party page.
+    if _victim_email_in_url(str(ml.get("canonical_url") or "")) and p >= 0.50 and not coherent_first_party:
+        hard_blockers.append("victim_email_prefilled_in_url")
 
     phish_signals: List[str] = []
     legit_signals: List[str] = []
@@ -288,6 +344,8 @@ def _apply_evidence_adjudication_layer(
         amb_signals.append("official_content_wrapper_pattern")
         if coherent_brand_host_identity_candidate:
             amb_signals.append("coherent_brand_wrapper_pattern")
+    if coherent_js_login:
+        amb_signals.append("first_party_script_submitted_login")
     if bool(beh.get("js_dynamic_form_injection_detected")):
         phish_score += 0.20
         phish_signals.append("js_dynamic_form_injection_detected")

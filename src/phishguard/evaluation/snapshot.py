@@ -216,7 +216,11 @@ def replay(split: str = "val", path: Optional[Path] = None, out: Optional[Path] 
                          "popular_domain": it.get("popular_domain"), "verdict": v["verdict_3way"],
                          "hard_blockers": v.get("evidence_hard_blockers"),
                          "layer1_p": payload["layer1_ml"].get("phish_proba"),
-                         "passes": _passes(it["expected"], v["verdict_3way"])})
+                         "passes": _passes(it["expected"], v["verdict_3way"]),
+                         "evidence": {k: v.get(k) for k in (
+                             "evidence_phishing_score", "evidence_legitimacy_score", "evidence_phishing_signals",
+                             "evidence_legitimacy_signals", "evidence_ambiguity_signals",
+                             "no_phishing_evidence_guard")}})
     summary = summarize(rows)
     report = {"provenance": provenance(), "command": f"phishguard replay --split {split}",
               "snapshot": {"file": str(path.relative_to(project_root())) if path.is_relative_to(project_root())
