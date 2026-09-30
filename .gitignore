@@ -79,3 +79,11 @@ Thumbs.db
 
 # --- local backup archive (delete after uploading) ---
 phishing_project_backup_*.zip
+
+# --- metrics audit (metrics/reproduce.sh) scratch; results/ and VERIFIED_METRICS.* are committed ---
+metrics/_work/
+.coverage
+
+# --- runtime reference registries (tiny, required by the app and by tests) ---
+!data/reference/
+!data/reference/*.csv

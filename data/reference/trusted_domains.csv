@@ -1,0 +1,6 @@
+registered_domain,allowed_hosts,organization,expected_cname_contains,expected_ns_contains,expected_asn_org_contains,notes
+google.com,accounts.google.com|myaccount.google.com|mail.google.com,Google,,,,Common Google auth and account surfaces
+microsoft.com,login.microsoftonline.com|account.microsoft.com|www.microsoft.com,Microsoft,,,,Common Microsoft sign-in/account surfaces
+amazon.com,www.amazon.com|sellercentral.amazon.com|signin.amazon.com,Amazon,,,,Common Amazon account and commerce surfaces
+linkedin.com,www.linkedin.com|linkedin.com,LinkedIn,,,,LinkedIn first-party account surfaces
+joinhandshake.com,app.joinhandshake.com|www.joinhandshake.com|app.joinhandshake.co.uk,Handshake,,,,University career platform

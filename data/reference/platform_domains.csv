@@ -1,0 +1,8 @@
+platform_name,official_registered_domains,official_hosts,user_hosting_registered_domains,allowed_oauth_providers,notes
+Weebly,weebly.com,www.weebly.com|login.weebly.com,weebly.com,google|facebook|apple|square,Website builder platform
+Framer,framer.com,www.framer.com|framer.com,framer.app,google|github,Website builder platform
+Cloudflare,cloudflare.com,www.cloudflare.com|dash.cloudflare.com,pages.dev|workers.dev,google|github,Cloud hosting/CDN platform
+Vercel,vercel.com,www.vercel.com|vercel.com|app.vercel.com,vercel.app,github|google,Cloud deployment platform
+GitHub,github.com,github.com|www.github.com,github.io,google,Code hosting platform
+Netlify,netlify.com,www.netlify.com|app.netlify.com,netlify.app,github|google,Cloud deployment platform
+Wix,wix.com,www.wix.com|users.wix.com,wixsite.com,google|facebook|apple,Website builder platform

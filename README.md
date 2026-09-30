@@ -85,6 +85,22 @@ Then open [http://localhost:8501](http://localhost:8501).
 - `uncertain`: evidence conflict or insufficient corroboration; manual review recommended.
 - `likely_legitimate`: strong legitimacy evidence with no high-risk phishing blockers.
 
+## Results
+
+Every number here was produced by re-running the code (seed 42) and is saved with its command, commit, data hash and environment in [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Regenerate with `bash metrics/reproduce.sh`.
+
+Layer-1 URL model, full Kaggle dataset (796,446 deduplicated URLs plus 837 curated legitimate URLs), held-out test of 140,057 rows from domains never seen in training, threshold 0.5:
+
+| Model | F1 | ROC-AUC | Precision | False-positive rate |
+|---|---|---|---|---|
+| Majority-class baseline | 0.000 | 0.500 | 0.000 | 0.0% |
+| LightGBM | 0.881 | 0.954 | 0.921 | 7.3% |
+| Random Forest | 0.864 | 0.940 | 0.936 | 5.6% |
+
+- Tests: 253 of 253 pass; 52% line coverage of `src/`.
+- Measured limits: on 298 curated official brand URLs, the Layer-1 models alone flag 35% to 54% as phishing. Without live capture, the adjudication layer returns `uncertain` for all 298 (none `likely_phishing`), and it returned `likely_legitimate` for none of the roughly 1,600 URLs tested that way.
+- The models currently in `outputs/models` came from `retrain_with_fresh.py`, whose split did not group scheme-less URLs by domain. See the metrics file before quoting those numbers.
+
 ## Known Limitations
 
 - URL-based ML can over-alert on modern JS-heavy sites.
