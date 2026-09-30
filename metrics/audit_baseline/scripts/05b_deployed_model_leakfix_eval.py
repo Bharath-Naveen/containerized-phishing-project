@@ -33,7 +33,7 @@ from phishguard.data.clean import canonicalize_url  # noqa: E402
 from phishguard.features.layer1 import extract_layer1_features  # noqa: E402
 from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "scripts" / "02_evaluate_layer1.py")
+_spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "audit_baseline" / "scripts" / "02_evaluate_layer1.py")
 ev = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ev)
 

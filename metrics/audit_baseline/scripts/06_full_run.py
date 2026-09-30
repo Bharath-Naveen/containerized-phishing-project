@@ -39,7 +39,7 @@ from phishguard.logging_util import setup_logging  # noqa: E402
 from phishguard.pipelines.kaggle import run_kaggle_pipeline  # noqa: E402
 from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "scripts" / "02_evaluate_layer1.py")
+_spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "audit_baseline" / "scripts" / "02_evaluate_layer1.py")
 ev = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ev)
 

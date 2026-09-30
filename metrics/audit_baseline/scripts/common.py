@@ -17,10 +17,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SEED = 42
-REPO = Path(__file__).resolve().parents[2]
-METRICS = REPO / "metrics"
+REPO = Path(__file__).resolve().parents[3]
+METRICS = REPO / "metrics" / "audit_baseline"
 RESULTS = METRICS / "results"
-WORK = METRICS / "_work"
+WORK = REPO / "metrics" / "_work"
 RAW_KAGGLE_CSV = REPO / "data" / "raw" / "kaggle" / "phishing_and_legitimate_urls.csv"
 
 
