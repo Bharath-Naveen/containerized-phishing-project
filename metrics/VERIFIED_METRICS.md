@@ -97,13 +97,30 @@ Without live capture the adjudication layer treats missing page evidence as a re
 | Layer 1 only (features + model + calibration) | 14.6 ms | 20.7 ms | 400 held-out URLs; Intel(R) Xeon(R) Processor @ 2.10GHz; warm process, one URL at a time, includes 4-model agreement |
 | Dashboard, ML-only (all rules + EAL) | 149.1 ms | 188.8 ms | same URLs |
 
-## Not run here
+## Full system with live page capture
 
-| Item | Why |
-|---|---|
-| Full-path latency with Playwright live capture | needs internet access to arbitrary sites; runs in GitHub Actions (Phase 4) |
-| Legitimacy-rescue false-positive delta with live capture | rescue conditions need capture evidence; Phase 4 |
-| Live EAL edge-case suite | needs live capture; Phase 4 |
+From `phishguard evaluate-live` (GitHub Actions, commit `2b90195f56`, 2026-09-30T17:51:13+00:00). Each page was captured once with Playwright and analyzed twice (legitimacy rescue on and off). Dummy login interaction: on. Raw values: `metrics/results/live_capture.json`.
+
+| Set | URLs | Captured OK | likely_phishing | uncertain | likely_legitimate | Pass rate | Pass rate (captured OK) | likely_phishing with rescue on / off |
+|---|---|---|---|---|---|---|---|---|
+| eal_edge_cases | 15 | 14 (93.3%) | 3 | 8 | 4 | 86.7% | 85.7% | 3 / 3 (0 changed) |
+| url_suites | 18 | 14 (77.8%) | 7 | 4 | 7 | 94.4% | 92.9% | 7 / 7 (0 changed) |
+| hard_legit | 15 | 15 (100.0%) | 2 | 6 | 7 | 86.7% | 86.7% | 2 / 2 (0 changed) |
+| official_brand | 136 | 134 (98.5%) | 8 | 26 | 102 | 94.1% | 94.8% | 8 / 8 (0 changed) |
+| phishstats_live | 0 | 0 (n/a) | 0 | 0 | 0 | n/a | n/a | 0 / 0 (0 changed) |
+| tranco_live | 60 | 42 (70.0%) | 22 | 10 | 28 | 63.3% | 90.5% | 22 / 22 (0 changed) |
+
+Pass means: legitimate sets not labeled likely_phishing; phishing sets labeled likely_phishing; the edge cases follow their own expected outcome (`data/evaluation/eal_edge_cases.json`). Live phishing pages are often already taken down, so check the captured-OK column before reading a phishing pass rate.
+
+Full-path latency (capture + analysis): p50 7.1 s, p95 16.1 s over 244 URLs (capture (Playwright) + full analysis, one URL at a time, GitHub-hosted runner).
+
+Edge cases that did not pass:
+
+| URL | Expected | Verdict | Captured OK |
+|---|---|---|---|
+| `https://mrbslink.weebly.com/` | phishing | uncertain | True |
+| `https://gghdgsyttetyeyy72.weebly.com/` | phishing | uncertain | True |
+
 
 ## Earlier baseline
 
