@@ -197,6 +197,7 @@ def data_section(train: pd.DataFrame, test: pd.DataFrame) -> Dict[str, Any]:
         "deduplicated_rows": clean.get("canonical_url_rows_after"),
         "run_mode": manifest.get("run_mode"),
         "curated_legit_added": (manifest.get("simple_legit_augment") or {}).get("rows_added"),
+        "tranco_rows_added": (manifest.get("tranco_augment") or {}).get("rows_added_after_dedupe"),
         "evaluation_exclusions": load("evaluation_exclusions.json"),
         "split": load("split_leak_safe_stats.json"),
         "train_rows": int(len(train)), "test_rows": int(len(test)),

@@ -75,7 +75,7 @@ def render_verified(r: Dict[str, Any]) -> str:
         ["Source", f"{raw.get('source', 'n/a')} (`{raw.get('file', '')}`, sha256 `{str(raw.get('sha256'))[:16]}...`)"],
         ["Raw rows x columns", f"{raw.get('rows', 0):,} x {raw.get('columns', 'n/a')} ({raw.get('legit_status_1', 0):,} legitimate, {raw.get('phishing_status_0', 0):,} phishing); no date column"],
         ["After canonical dedupe", f"{d.get('deduplicated_rows') or 0:,}"],
-        ["Run mode", f"{d.get('run_mode')}; {d.get('curated_legit_added') or 0} curated legitimate homepages added"],
+        ["Run mode", f"{d.get('run_mode')}; {d.get('curated_legit_added') or 0} curated legitimate homepages added" + (f"; {d['tranco_rows_added']:,} Tranco homepages added" if d.get("tranco_rows_added") else "")],
         ["Removed so evaluation stays out-of-sample", f"{ex.get('rows_dropped_legit_eval_domains', 0):,} rows on legit-evaluation domains, {ex.get('rows_dropped_phish_eval_hosts', 0):,} on phishing-evaluation hosts"],
         ["Train / test rows", f"{d['train_rows']:,} / {d['test_rows']:,} (train {d['train_class_counts']['phishing']:,} phishing, test {d['test_class_counts']['phishing']:,} phishing)"],
         ["Split", f"StratifiedGroupKFold by registered domain: {sp.get('train_groups', 0):,} / {sp.get('test_groups', 0):,} domains, overlap {sp.get('registered_domain_overlap_count')}, rows without a parsable domain {sp.get('malformed_group_keys')}"],
@@ -105,7 +105,7 @@ def render_verified(r: Dict[str, Any]) -> str:
         [NICE.get(m, m), f"{x['f1']['mean']:.3f} ± {x['f1']['std']:.3f}", f"{x['roc_auc']['mean']:.3f} ± {x['roc_auc']['std']:.3f}",
          f"{x['pr_auc']['mean']:.3f} ± {x['pr_auc']['std']:.3f}", f"{100 * x['false_positive_rate']['mean']:.1f}% ± {100 * x['false_positive_rate']['std']:.1f}"]
         for m, x in cv["models"].items()])
-    L += ["", f"Mean ± standard deviation over 5 folds; domain overlap per fold: {cv['group_overlap_per_fold']}.", ""]
+    L += ["", f"Mean ± standard deviation over 5 folds; domain overlap per fold: {cv['group_overlap_per_fold']}. The majority-class baseline predicts whichever class is larger in each training fold, so in a fold where phishing is the majority it flags everything.", ""]
 
     L += ["## External sets (never in training)", ""]
     rows = []

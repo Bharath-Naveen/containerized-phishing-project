@@ -334,6 +334,11 @@ def run_kaggle_pipeline(
     _kept, excl_stats = drop_evaluation_rows(_pre)
     _kept.to_csv(enrich_input, index=False)
     manifest["evaluation_exclusions"] = excl_stats
+    # Always write the run manifest (it used to be written only for sampled runs, so --full runs
+    # left no record of run mode or augmentation counts).
+    manifest_out = {k: v for k, v in manifest.items() if k not in ("full_deduplicated_csv", "sampled_cleaned_csv")}
+    manifest_out["rows_enriched"] = int(excl_stats["rows_out"])
+    (reports_dir() / "kaggle_sample_manifest.json").write_text(json.dumps(manifest_out, indent=2), encoding="utf-8")
     run_context["evaluation_exclusions"] = excl_stats
     (reports_dir() / "evaluation_exclusions.json").write_text(json.dumps(excl_stats, indent=2), encoding="utf-8")
     logger.info("Evaluation exclusions: %s", excl_stats)
