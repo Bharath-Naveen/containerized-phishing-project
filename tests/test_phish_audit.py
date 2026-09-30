@@ -2,11 +2,12 @@
 
 import pytest
 
-from phishguard.paths import models_dir, reports_dir
+from phishguard.app.ml_layer1 import runtime_models_dir
+from phishguard.paths import reports_dir
 
 
 def test_run_phish_audit_writes_json_and_has_regression_keys() -> None:
-    if not (models_dir() / "layer1_primary.joblib").is_file():
+    if not (runtime_models_dir() / "layer1_primary.joblib").is_file():
         pytest.skip("No layer1_primary.joblib")
 
     from phishguard.evaluation.phish_audit import OUTPUT_JSON, run_phish_audit
