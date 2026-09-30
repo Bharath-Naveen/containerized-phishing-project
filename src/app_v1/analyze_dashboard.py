@@ -85,6 +85,7 @@ _FASTTEXT_MIN_TEXT_CHARS = 120
 _FASTTEXT_MODEL_CACHE: Any = None
 _FASTTEXT_MODEL_ERROR: Optional[str] = None
 _TRUSTED_DOMAIN_REGISTRY_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
+_TRUSTED_DOMAIN_REGISTRY_CACHE_PATH: Optional[str] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE: Optional[List[Dict[str, Any]]] = None
 _PLATFORM_DOMAIN_REGISTRY_CACHE_PATH: Optional[str] = None
 _OFFICIAL_DOMAIN_TRUST_PRIOR_CACHE: Optional[Dict[str, Any]] = None
@@ -367,12 +368,17 @@ def compute_brand_domain_coherence(
 
 
 def _load_trusted_domain_registry(csv_path: str) -> Dict[str, Dict[str, Any]]:
+    # Cache is keyed by resolved path (same fix the platform registry got earlier): a cache that
+    # ignored the path could be filled once from a different CSV and then served everywhere.
     global _TRUSTED_DOMAIN_REGISTRY_CACHE
-    if _TRUSTED_DOMAIN_REGISTRY_CACHE is not None:
-        return _TRUSTED_DOMAIN_REGISTRY_CACHE
+    global _TRUSTED_DOMAIN_REGISTRY_CACHE_PATH
     p = Path(csv_path)
     if not p.is_absolute():
         p = (_REPO_ROOT / p).resolve()
+    resolved = str(p)
+    if _TRUSTED_DOMAIN_REGISTRY_CACHE is not None and _TRUSTED_DOMAIN_REGISTRY_CACHE_PATH == resolved:
+        return _TRUSTED_DOMAIN_REGISTRY_CACHE
+    _TRUSTED_DOMAIN_REGISTRY_CACHE_PATH = resolved
     if not p.is_file():
         _TRUSTED_DOMAIN_REGISTRY_CACHE = {}
         return _TRUSTED_DOMAIN_REGISTRY_CACHE

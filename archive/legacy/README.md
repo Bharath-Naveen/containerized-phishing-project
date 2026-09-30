@@ -8,3 +8,8 @@ These artifacts are **not** part of the primary Layer-1 ML + dashboard flow. The
 | `scripts/*.py` | Old one-off scripts (scrapers, seed builders) superseded by `src/pipeline`. |
 
 Primary app: `streamlit run src/app_v1/frontend.py`.
+
+## Added in the rebuild (Phase 2)
+
+- `ai_adjudication/`: the retired LLM adjudication path and its screenshot/compare triage flow.
+- `old_pipeline/`: pipeline scripts superseded by the domain-grouped Kaggle pipeline.

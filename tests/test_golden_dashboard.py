@@ -30,7 +30,26 @@ def test_dashboard_output_unchanged(case):
     dash = _dashboard_module()
     capture = _rec.make_capture(_rec.CAPTURE_CASES[case["name"]]) if case["kind"] == "capture" else None
     got = _rec.run_case(dash, case["url"], case["ml"], case["agreement"], capture)
-    assert got == case["expected"]
+    diffs = _diff(case["expected"], got)
+    assert not diffs, "golden mismatch:\n" + "\n".join(diffs[:15])
+
+
+def _diff(a, b, path="") -> list:
+    if type(a) is not type(b):
+        return [f"{path}: {a!r} != {b!r}"]
+    if isinstance(a, dict):
+        out = []
+        for k in sorted(set(a) | set(b)):
+            if k not in a or k not in b:
+                out.append(f"{path}.{k}: only in {'expected' if k in a else 'got'}")
+            else:
+                out += _diff(a[k], b[k], f"{path}.{k}")
+        return out
+    if isinstance(a, list):
+        if len(a) != len(b):
+            return [f"{path}: list len {len(a)} != {len(b)} ({a!r} vs {b!r})"[:400]]
+        return [d for i, (x, y) in enumerate(zip(a, b)) for d in _diff(x, y, f"{path}[{i}]")]
+    return [] if a == b else [f"{path}: {a!r} != {b!r}"[:400]]
 
 
 def test_golden_file_present():
