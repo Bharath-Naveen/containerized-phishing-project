@@ -14,7 +14,12 @@ from urllib.parse import parse_qsl, urlparse
 
 import tldextract
 
-from src.pipeline.features.brand_signals import BRAND_TOKENS, host_on_official_brand_apex
+from src.pipeline.features.brand_signals import (
+    BRAND_TOKENS,
+    _hyphenated_brand_prefix_deception,
+    _typosquat_embedded_in_label,
+    host_on_official_brand_apex,
+)
 from src.pipeline.features.hosting_features import extract_hosting_features
 from src.pipeline.safe_url import safe_urlparse
 
@@ -128,7 +133,25 @@ def _host_suspicious_reasons(parsed: Any, host: str, registrable: str, sublabels
         if any(tok in s for s in sublabels):
             reasons.append("brand_token_in_subdomain_not_matching_registrable")
             break
+
+    # Rebuild Phase 1: look at the registered label itself, not only subdomains. Previously
+    # "google-login-secure.xyz" and "totally-fake-bank-login.xyz" passed as ordinary hosts, so
+    # with no live capture the adjudication layer softened a 0.97+ ML score to "uncertain".
+    reg_label = reg.split(".")[0] if reg else ""
+    if reg_label and not host_on_official_brand_apex(host):
+        if _hyphenated_brand_prefix_deception([reg_label]) or _typosquat_embedded_in_label([reg_label]):
+            reasons.append("brand_token_in_registrable_not_official")
+        lure_hits = {t for t in reg_label.split("-") if t in _CREDENTIAL_LURE_TOKENS}
+        if len(lure_hits) >= 2:
+            reasons.append("credential_lure_tokens_in_registrable_label")
     return reasons
+
+
+# Words phishing kits put in the registered name to look like an account/security page.
+_CREDENTIAL_LURE_TOKENS = frozenset(
+    {"login", "signin", "logon", "verify", "verification", "secure", "security", "account", "update",
+     "bank", "banking", "wallet", "support", "confirm", "password", "unlock", "billing", "recovery"}
+)
 
 
 def assess_host_path_reasoning(
