@@ -99,3 +99,54 @@ Command: `python metrics/scripts/10_phase1_check.py` (50K sample, seed 42, 73 s)
 - The shipped models in `outputs/models/` are the old, flawed ones. They get replaced after the full retrain in Phase 3.
 - The `metrics/` audit scripts describe the *old* pipeline on purpose (they are the "before" record). Phase 3 replaces them with one evaluation command for the new code.
 - Live-capture measurements wait for GitHub Actions (Phase 4).
+
+---
+
+## 2026-09-30 · Phase 2: Restructure (same behavior, clearer code)
+
+**Goal.** Make the code easy to find your way around and easy to explain, without changing a single verdict. Current layout and a code map: [HOW_IT_WORKS.md](HOW_IT_WORKS.md), Part 5.
+
+### Step 1: A safety net first (golden-output tests)
+
+**What.** Before moving anything, the full dashboard output was frozen for 103 cases: 95 URLs through the ML-only path (the suites, hard-legit list, official brand and PhishStats samples, and tricky shapes like punycode, IP hosts, user-hosted clones) and 8 hand-built live-capture cases (legit same-domain login, credential form posting to another domain, wrapper page, blocked capture, news article, free-hosted brand clone, security block page, official authwall). The ML scores are recorded once and replayed, so the test protects the rules and the adjudication logic, not whichever model is on disk.
+
+**Proof it works.** Nudging one verdict threshold from 0.56 to 0.57 made 52 of the 104 golden checks fail. So "all golden tests pass" really does mean "same outputs".
+
+**It already caught a bug.** The trusted-domain registry cache ignored which file it was loaded from, so whichever test loaded it first decided what every later lookup saw. The golden test failed only when run after certain other tests. The cache is now keyed by file path (the platform registry already had this fix).
+
+### Step 2: Archive what nothing uses
+
+An import-graph scan found 19 modules that nothing in the app, the training pipelines or the audits reaches. They moved to `archive/legacy/` with a README each:
+- `ai_adjudication/`: the retired OpenAI adjudication path and the old screenshot/compare triage flow built around it (9 app modules, 2 pipeline modules, their tests).
+- `old_pipeline/`: 8 superseded pipeline scripts (old ingest, the non-grouped split, run_all, and so on).
+
+`openai` was removed from `requirements.txt` since no running code imports it.
+
+### Step 3: Move everything into one package
+
+`src/pipeline/` and `src/app_v1/` became `src/phishguard/` with sub-packages by job: `urls`, `data`, `features`, `models`, `pipelines`, `evaluation`, `app`. Done with `git mv` (history kept) plus an automatic import rewrite. A few files got clearer names, for example `analyze_dashboard.py` is now `app/dashboard.py`, `run_kaggle_pipeline.py` is `pipelines/kaggle.py`, `split_leak_safe.py` is `data/split.py`. Imports are now `phishguard.*`, with `src/` on the path.
+
+### Step 4: Split the 3,585-line dashboard file
+
+It is now seven files, each with one job: `dashboard.py` (wires the layers together, 594 lines), `eal.py` (the judge), `verdict_rules.py` (adjustments before the judge), `capture_signals.py`, `registries.py`, `brand_coherence.py`, `domain_utils.py`. Function bodies were moved by a script, not retyped, and `dashboard.py` re-exports the moved names so old imports still work. Golden tests: identical.
+
+While checking for undefined names, a latent bug surfaced: the full (non-Layer-1) enrich path in `data/enrich.py` called `safe_hostname` without importing it, so it would have crashed the first time anyone used it. Fixed.
+
+### Step 5: One command, one config
+
+- `phishguard train | analyze | evaluate | deploy | serve` (install with `pip install -e .`; `python -m phishguard` also works).
+- `phishguard/config.py` holds the seed (42) and defaults.
+- Docker: `PYTHONPATH=/app/src`, new frontend path, and the image now includes the small registries the app needs (`data/official_domains.json`, `data/reference/`, `data/evaluation/`). A plain `docker build` used to leave them out, so a hosted container would have run without them. Not built here because this workspace has no Docker daemon; GitHub Actions builds it in Phase 4.
+- README (setup, commands, layout) and docs updated to the new paths.
+
+### Gate 2 result
+
+| Check | Result |
+|---|---|
+| Full test suite | 362 passed (359 carried over + 3 new CLI tests; 11 AI-only tests moved to the archive with their code) |
+| Golden outputs (103 cases) | identical before and after every step |
+| Undefined names (ruff F821) in `src/phishguard` | 0 |
+
+### Still open after Phase 2
+- `phishguard evaluate` currently runs the URL-suite benchmark only; Phase 3 turns it into the single reproducible evaluation command.
+- The `metrics/` audit scripts now import the new package, so running them on this branch measures the new code. The "before" numbers stay pinned to tag `audit-baseline-2026-09-29`.
