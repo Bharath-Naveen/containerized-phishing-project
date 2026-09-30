@@ -1,0 +1,729 @@
+{
+  "command": "python metrics/scripts/04_suites_and_fp.py",
+  "mode": "ML-only dashboard path (reinforcement=False); no live capture",
+  "variants": {
+    "deployed": {
+      "rescue_on": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.13333333333333333,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "likely_phishing": 116,
+              "uncertain": 84
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.42,
+            "false_positive_rate_likely_phishing": 0.58,
+            "layer1_flag_rate": 0.67,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 141,
+              "uncertain": 59
+            },
+            "pass_rate_likely_phishing": 0.705,
+            "layer1_flag_rate": 0.985,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.2953020134228188,
+            "rescue_applied_count": 0
+          },
+          "simple_legit": {
+            "n": 884,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 879,
+              "likely_phishing": 5
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.994343891402715,
+            "false_positive_rate_likely_phishing": 0.005656108597285068,
+            "layer1_flag_rate": 0.9321266968325792,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.16666666666666666,
+            "rescue_applied_count": 0
+          }
+        },
+        "latency_ms_cpu": {
+          "t_layer1_ms": {
+            "n": 400,
+            "p50": 101.69612649997362,
+            "p95": 129.82755194968829,
+            "mean": 105.46182057751481
+          },
+          "t_dashboard_ml_only_ms": {
+            "n": 400,
+            "p50": 228.0822799998532,
+            "p95": 280.6247098500535,
+            "mean": 234.29784930999062
+          }
+        }
+      },
+      "rescue_off": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.13333333333333333,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "likely_phishing": 116,
+              "uncertain": 84
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.42,
+            "false_positive_rate_likely_phishing": 0.58,
+            "layer1_flag_rate": 0.67,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 141,
+              "uncertain": 59
+            },
+            "pass_rate_likely_phishing": 0.705,
+            "layer1_flag_rate": 0.985,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.2953020134228188,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.16666666666666666,
+            "rescue_applied_count": 0
+          }
+        }
+      },
+      "rescue_ablation": {
+        "n_urls_compared": 731,
+        "verdicts_changed": 0,
+        "legit_false_positives_rescue_on": 116,
+        "legit_false_positives_rescue_off": 116
+      }
+    },
+    "asis_50k": {
+      "rescue_on": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.06666666666666667,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 198,
+              "likely_phishing": 2
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.99,
+            "false_positive_rate_likely_phishing": 0.01,
+            "layer1_flag_rate": 0.145,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "uncertain": 163,
+              "likely_phishing": 37
+            },
+            "pass_rate_likely_phishing": 0.185,
+            "layer1_flag_rate": 0.665,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.31208053691275167,
+            "rescue_applied_count": 0
+          },
+          "simple_legit": {
+            "n": 884,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 879,
+              "likely_phishing": 5
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.994343891402715,
+            "false_positive_rate_likely_phishing": 0.005656108597285068,
+            "layer1_flag_rate": 0.9411764705882353,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.0,
+            "rescue_applied_count": 0
+          }
+        },
+        "latency_ms_cpu": {
+          "t_layer1_ms": {
+            "n": 400,
+            "p50": 8.822603999988132,
+            "p95": 12.667318800185965,
+            "mean": 9.569164787507134
+          },
+          "t_dashboard_ml_only_ms": {
+            "n": 400,
+            "p50": 120.0063164999392,
+            "p95": 150.00822295014586,
+            "mean": 123.45257107499037
+          }
+        }
+      },
+      "rescue_off": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.06666666666666667,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 198,
+              "likely_phishing": 2
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.99,
+            "false_positive_rate_likely_phishing": 0.01,
+            "layer1_flag_rate": 0.145,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "uncertain": 163,
+              "likely_phishing": 37
+            },
+            "pass_rate_likely_phishing": 0.185,
+            "layer1_flag_rate": 0.665,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.31208053691275167,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.0,
+            "rescue_applied_count": 0
+          }
+        }
+      },
+      "rescue_ablation": {
+        "n_urls_compared": 731,
+        "verdicts_changed": 0,
+        "legit_false_positives_rescue_on": 2,
+        "legit_false_positives_rescue_off": 2
+      }
+    },
+    "decontaminated": {
+      "rescue_on": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.26666666666666666,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 198,
+              "likely_phishing": 2
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.99,
+            "false_positive_rate_likely_phishing": 0.01,
+            "layer1_flag_rate": 0.14,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "uncertain": 163,
+              "likely_phishing": 37
+            },
+            "pass_rate_likely_phishing": 0.185,
+            "layer1_flag_rate": 0.675,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.348993288590604,
+            "rescue_applied_count": 0
+          },
+          "simple_legit": {
+            "n": 884,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 879,
+              "likely_phishing": 5
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.994343891402715,
+            "false_positive_rate_likely_phishing": 0.005656108597285068,
+            "layer1_flag_rate": 0.9649321266968326,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.3333333333333333,
+            "rescue_applied_count": 0
+          }
+        },
+        "latency_ms_cpu": {
+          "t_layer1_ms": {
+            "n": 400,
+            "p50": 8.690927000088777,
+            "p95": 12.531579800179312,
+            "mean": 9.369646394997062
+          },
+          "t_dashboard_ml_only_ms": {
+            "n": 400,
+            "p50": 116.67837300001338,
+            "p95": 148.06738639988453,
+            "mean": 121.01304928249989
+          }
+        }
+      },
+      "rescue_off": {
+        "per_set": {
+          "hard_legit": {
+            "n": 15,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 15
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.26666666666666666,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:legit": {
+            "n": 200,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 198,
+              "likely_phishing": 2
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 0.99,
+            "false_positive_rate_likely_phishing": 0.01,
+            "layer1_flag_rate": 0.14,
+            "rescue_applied_count": 0
+          },
+          "kaggle_heldout_sample:phishing": {
+            "n": 200,
+            "expected": "phishing",
+            "verdicts": {
+              "uncertain": 163,
+              "likely_phishing": 37
+            },
+            "pass_rate_likely_phishing": 0.185,
+            "layer1_flag_rate": 0.675,
+            "rescue_applied_count": 0
+          },
+          "official_brand_2026_04_26": {
+            "n": 298,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 298
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.348993288590604,
+            "rescue_applied_count": 0
+          },
+          "suite:hard_phishing": {
+            "n": 4,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 3,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.75,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.6666666666666666,
+            "rescue_applied_count": 0
+          },
+          "suite:obvious_phish": {
+            "n": 2,
+            "expected": "phishing",
+            "verdicts": {
+              "likely_phishing": 1,
+              "uncertain": 1
+            },
+            "pass_rate_likely_phishing": 0.5,
+            "layer1_flag_rate": 1.0,
+            "rescue_applied_count": 0
+          },
+          "suite:tricky_legit": {
+            "n": 6,
+            "expected": "legitimate",
+            "verdicts": {
+              "uncertain": 6
+            },
+            "pass_rate_strict_likely_legitimate": 0.0,
+            "pass_rate_not_flagged_phishing": 1.0,
+            "false_positive_rate_likely_phishing": 0.0,
+            "layer1_flag_rate": 0.3333333333333333,
+            "rescue_applied_count": 0
+          }
+        }
+      },
+      "rescue_ablation": {
+        "n_urls_compared": 731,
+        "verdicts_changed": 0,
+        "legit_false_positives_rescue_on": 2,
+        "legit_false_positives_rescue_off": 2
+      }
+    }
+  },
+  "_provenance": {
+    "generated_utc": "2026-09-29T20:06:29+00:00",
+    "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+    "code_trees": {
+      "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+      "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+      "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+      "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+    },
+    "seed": 42,
+    "environment": {
+      "python": "3.11.15",
+      "os": "Linux 6.18.44-fc-v37",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu_count": 2,
+      "ram_gb": 7.8,
+      "gpu": "none (CPU only)",
+      "packages": {
+        "numpy": "1.26.4",
+        "pandas": "2.3.3",
+        "sklearn": "1.5.1",
+        "xgboost": "2.1.4",
+        "lightgbm": "4.7.0",
+        "joblib": "1.4.2",
+        "tldextract": "5.3.2",
+        "pytest": "8.4.2",
+        "playwright": "unknown"
+      }
+    }
+  }
+}

@@ -1,0 +1,320 @@
+{
+  "command": "python metrics/scripts/05_deployed_model.py",
+  "deployed_run": "20260427_234728",
+  "data": {
+    "train_csv_sha256": "0633b5932a68ea0f8e47d79724d48e7c96fcf5f3d5cbc66562eded380808df7a",
+    "test_csv_sha256": "d478f2ebccb84aa0f4412afbdc1097e36c0d1d360c373f4a9ce345b3a9594a9a",
+    "n_train": 401918,
+    "n_test": 98082,
+    "test_class_counts": {
+      "legit_0": 53326,
+      "phish_1": 44756
+    },
+    "registered_domains_shared_by_train_and_test": 14823,
+    "n_features": 56
+  },
+  "held_out_test_threshold_0_5_raw": {
+    "dummy_most_frequent": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "false_positive_rate": 0.0,
+      "accuracy": 0.5436879345853469,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          53326,
+          0
+        ],
+        [
+          44756,
+          0
+        ]
+      ],
+      "roc_auc": 0.5,
+      "pr_auc": 0.456312065414653
+    },
+    "random_forest (deployed layer1_primary)": {
+      "precision": 0.8248669677592452,
+      "recall": 0.8243140584502636,
+      "f1": 0.8245904204197492,
+      "false_positive_rate": 0.14688894723024415,
+      "accuracy": 0.8399706368140943,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          45493,
+          7833
+        ],
+        [
+          7863,
+          36893
+        ]
+      ],
+      "roc_auc": 0.9172692257228447,
+      "pr_auc": 0.915016296257005,
+      "bootstrap_95ci": {
+        "precision": [
+          0.8212592916425239,
+          0.8284120810529794
+        ],
+        "recall": [
+          0.8207024886657953,
+          0.8277525965757431
+        ],
+        "f1": [
+          0.8219841987956246,
+          0.8272927056035886
+        ],
+        "roc_auc": [
+          0.9156180954819888,
+          0.9188953443540916
+        ],
+        "pr_auc": [
+          0.9131968371276091,
+          0.9168872382241021
+        ],
+        "false_positive_rate": [
+          0.14395502809215763,
+          0.14984161125819803
+        ]
+      },
+      "sha256": "db37aa6ff0585d44746552ec4dfde82374e47e47a4ae0613d8722bdb6869c9b6"
+    },
+    "logistic_regression (witness)": {
+      "precision": 0.781967971451858,
+      "recall": 0.7931673965501832,
+      "f1": 0.7875278692888755,
+      "false_positive_rate": 0.18561302179049619,
+      "accuracy": 0.8047042270753043,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          43428,
+          9898
+        ],
+        [
+          9257,
+          35499
+        ]
+      ],
+      "roc_auc": 0.8706149320512578,
+      "pr_auc": 0.8618498428763686,
+      "bootstrap_95ci": {
+        "precision": [
+          0.7781872522410739,
+          0.7858982745285482
+        ],
+        "recall": [
+          0.7892089047447056,
+          0.7967692037531022
+        ],
+        "f1": [
+          0.7847402098750695,
+          0.7904184850666236
+        ],
+        "roc_auc": [
+          0.8683654218286799,
+          0.872715583546467
+        ],
+        "pr_auc": [
+          0.8589707446202189,
+          0.8647540829213025
+        ],
+        "false_positive_rate": [
+          0.18227826515678333,
+          0.1888740196599371
+        ]
+      },
+      "sha256": "715d42e5b61c657e319238c373da729046d6dabd6f2943abb130213f39a35940"
+    },
+    "xgboost (witness)": {
+      "precision": 0.83938598857311,
+      "recall": 0.764835999642506,
+      "f1": 0.8003787834504367,
+      "false_positive_rate": 0.12282938904099314,
+      "accuracy": 0.8259109724516221,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          46776,
+          6550
+        ],
+        [
+          10525,
+          34231
+        ]
+      ],
+      "roc_auc": 0.9045962976279334,
+      "pr_auc": 0.9034685419478676,
+      "bootstrap_95ci": {
+        "precision": [
+          0.8357663472153194,
+          0.8427762466863592
+        ],
+        "recall": [
+          0.7609850847355961,
+          0.7687251610729653
+        ],
+        "f1": [
+          0.7974047656828196,
+          0.8031793984530287
+        ],
+        "roc_auc": [
+          0.9027210600127605,
+          0.9063633644014242
+        ],
+        "pr_auc": [
+          0.9014216836304175,
+          0.9053529434196151
+        ],
+        "false_positive_rate": [
+          0.12012107638419274,
+          0.12563335539637635
+        ]
+      },
+      "sha256": "761c4c170871603e160f91c886c9b0fdb0f27f0e671c705ed0544d7f6da2bbf4"
+    },
+    "lightgbm (witness)": {
+      "precision": 0.8394837668884856,
+      "recall": 0.8371391545267673,
+      "f1": 0.8383098213386734,
+      "false_positive_rate": 0.13434347222743126,
+      "accuracy": 0.8526437062865765,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          46162,
+          7164
+        ],
+        [
+          7289,
+          37467
+        ]
+      ],
+      "roc_auc": 0.9283080888386654,
+      "pr_auc": 0.9247826731486479,
+      "bootstrap_95ci": {
+        "precision": [
+          0.8359314831547274,
+          0.8427405571259624
+        ],
+        "recall": [
+          0.8334890664185509,
+          0.840481534729643
+        ],
+        "f1": [
+          0.8357831826187591,
+          0.840818375212883
+        ],
+        "roc_auc": [
+          0.926807724912758,
+          0.929810832006896
+        ],
+        "pr_auc": [
+          0.9230382939085527,
+          0.9264094803118503
+        ],
+        "false_positive_rate": [
+          0.1315872262667169,
+          0.1373580170272755
+        ]
+      },
+      "sha256": "2aca327dc9ebe89a4ff3fdd75db6e12b2e3552779300d1960ae2f6396d184f05"
+    }
+  },
+  "calibration": {
+    "shipped_calibrator_sha256": "901a01588971c0c6ac331e75c3b6aa71faddaeb9b322b05d5a8a84f9456e3801",
+    "note": "deploy_layer1_primary.py copies the model only; the calibrator on disk was fit for a different model (file dated before the RF was deployed).",
+    "brier_raw": 0.1148772860060492,
+    "brier_shipped_calibrator": 0.1168491059361956,
+    "brier_refit_calibrator": 0.11292011399052776,
+    "flag_at_calibrated_0_5_shipped": {
+      "precision": 0.8255545855438408,
+      "recall": 0.824023594601841,
+      "f1": 0.8247883796084045,
+      "false_positive_rate": 0.1461388440910625,
+      "accuracy": 0.84024591668196,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          45533,
+          7793
+        ],
+        [
+          7876,
+          36880
+        ]
+      ],
+      "roc_auc": 0.9150718294063269,
+      "pr_auc": 0.9038523373513163
+    },
+    "flag_at_calibrated_0_5_refit": {
+      "precision": 0.8480880538950565,
+      "recall": 0.7988202699079453,
+      "f1": 0.8227172312223858,
+      "false_positive_rate": 0.12009151258298016,
+      "accuracy": 0.8429069554046614,
+      "confusion_matrix_[[tn,fp],[fn,tp]]": [
+        [
+          46922,
+          6404
+        ],
+        [
+          9004,
+          35752
+        ]
+      ],
+      "roc_auc": 0.9175040134020751,
+      "pr_auc": 0.9109360559894314
+    },
+    "refit_calibrator_written_to": "metrics/_work/deployed_rf_refit_calibrator.joblib"
+  },
+  "official_brand_urls": {
+    "n_urls": 298,
+    "n_urls_exactly_in_train": 1,
+    "n_urls_whose_domain_in_train": 219,
+    "fp_rate_raw_0_5": 0.2986577181208054,
+    "fp_rate_shipped_calibrated_0_5": 0.2953020134228188,
+    "fp_rate_refit_calibrated_0_5": 0.2785234899328859,
+    "mean_raw_p_phish": 0.3995265329561321,
+    "fp_count_raw_0_5": 89
+  },
+  "fresh_phishstats": {
+    "n_phishstats_rows": 284,
+    "n_in_deployed_train_split": 0,
+    "recall_all_rows": 0.9471830985915493,
+    "recall_rows_in_train": null,
+    "recall_rows_not_in_train": 0.9471830985915493,
+    "n_rows_not_in_train": 284,
+    "n_rows_whose_domain_in_train": 61,
+    "collection_dates": [
+      "2025-04-29",
+      "2026-04-26"
+    ]
+  },
+  "_provenance": {
+    "generated_utc": "2026-09-29T20:13:19+00:00",
+    "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+    "code_trees": {
+      "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+      "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+      "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+      "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+    },
+    "seed": 42,
+    "environment": {
+      "python": "3.11.15",
+      "os": "Linux 6.18.44-fc-v37",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu_count": 2,
+      "ram_gb": 7.8,
+      "gpu": "none (CPU only)",
+      "packages": {
+        "numpy": "1.26.4",
+        "pandas": "2.3.3",
+        "sklearn": "1.5.1",
+        "xgboost": "2.1.4",
+        "lightgbm": "4.7.0",
+        "joblib": "1.4.2",
+        "tldextract": "5.3.2",
+        "pytest": "8.4.2",
+        "playwright": "unknown"
+      }
+    }
+  }
+}
