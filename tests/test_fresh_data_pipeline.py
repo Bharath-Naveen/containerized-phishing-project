@@ -106,7 +106,8 @@ def test_ensure_split_compatible_adds_canonical_url(tmp_path: Path) -> None:
     out = ensure_split_compatible(p)
     df = pd.read_csv(out, dtype=str, low_memory=False)
     assert "canonical_url" in df.columns
-    assert df.loc[0, "canonical_url"] == "https://a.com"
+    # Rebuild: the fallback canonicalizes (it used to copy the raw string, which broke grouping).
+    assert df.loc[0, "canonical_url"] == "https://a.com/"
 
 
 def test_ensure_split_compatible_keeps_existing_canonical_url(tmp_path: Path) -> None:
@@ -123,7 +124,13 @@ def test_ensure_enrich_compatible_adds_canonical_url() -> None:
     df = pd.DataFrame({"url": ["https://a.com"], "status": [0], "label": [1]})
     out = ensure_enrich_compatible(df)
     assert "canonical_url" in out.columns
-    assert out.loc[0, "canonical_url"] == "https://a.com"
+    assert out.loc[0, "canonical_url"] == "https://a.com/"
+
+
+def test_ensure_enrich_compatible_canonicalizes_bare_host() -> None:
+    df = pd.DataFrame({"url": ["summah.info/"], "status": [0], "label": [1]})
+    out = ensure_enrich_compatible(df)
+    assert out.loc[0, "canonical_url"] == "http://summah.info/"
 
 
 def test_retrain_pipeline_end_to_end_mocked(tmp_path: Path) -> None:
