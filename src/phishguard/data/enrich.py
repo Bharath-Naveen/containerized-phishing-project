@@ -17,6 +17,7 @@ from phishguard.features.semantic_text import extract_semantic_features
 from phishguard.features.url_features import extract_url_features
 from phishguard.features.layer1 import extract_layer1_features
 from phishguard.paths import ensure_layout, interim_dir, processed_dir
+from phishguard.urls.safe import safe_hostname
 
 logger = logging.getLogger(__name__)
 
