@@ -1,0 +1,225 @@
+{
+  "command": "python metrics/scripts/10_phase1_check.py",
+  "note": "Progress check after Phase 1 fixes; 50K stratified sample, seed 42, ML-only dashboard path.",
+  "pipeline_runtime_seconds": 73.3,
+  "evaluation_exclusions": {
+    "rows_in": 50882,
+    "rows_dropped_legit_eval_domains": 3017,
+    "rows_dropped_phish_eval_hosts": 13,
+    "rows_out": 47852,
+    "n_excluded_domains": 38,
+    "n_excluded_hosts": 264
+  },
+  "split": {
+    "split_method": "StratifiedGroupKFold_first_fold",
+    "n_splits_param": 5,
+    "approx_test_fraction": 0.2,
+    "n_train": 38636,
+    "n_test": 9216,
+    "train_groups": 24962,
+    "test_groups": 6185,
+    "malformed_group_keys": 63,
+    "malformed_group_fraction": 0.0013165593914569924,
+    "canonical_url_overlap_count": 0,
+    "registered_domain_overlap_count": 0,
+    "train_label_counts": {
+      "0": 19980,
+      "1": 18656
+    },
+    "test_label_counts": {
+      "0": 4800,
+      "1": 4416
+    }
+  },
+  "training_config": {
+    "n_fit_rows": 33731,
+    "n_validation_rows": 4903,
+    "validation_split": "StratifiedGroupKFold by registered domain, one fold of the training rows",
+    "feature_parity_check": {
+      "checked_rows": 300,
+      "mismatched_rows": 0
+    },
+    "layer1_dropped_from_training_features": [
+      "has_https",
+      "https_without_official_anchor",
+      "official_anchor_with_https"
+    ],
+    "layer1_primary_selection_policy": "validated"
+  },
+  "n_features": 54,
+  "models_test_threshold_0_5": [
+    {
+      "model": "logistic_regression",
+      "accuracy": 0.7208116319444444,
+      "precision": 0.6854497886898773,
+      "recall": 0.771286231884058,
+      "f1": 0.7258391049547149,
+      "roc_auc": 0.8156227826841789,
+      "confusion_matrix": [
+        [
+          3237,
+          1563
+        ],
+        [
+          1010,
+          3406
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.55958144736095,
+      "val_pr_auc": 0.8378751678414275,
+      "val_roc_auc": 0.8346988771010608,
+      "val_f1": 0.7432348688287543,
+      "val_official_brand_fp_rate": 0.32098765432098764,
+      "audit_official_https_mean_phish_proba": 0.13182420545882703
+    },
+    {
+      "model": "random_forest",
+      "accuracy": 0.8211805555555556,
+      "precision": 0.8152619589977221,
+      "recall": 0.8104619565217391,
+      "f1": 0.8128548716784011,
+      "roc_auc": 0.8990444312349034,
+      "confusion_matrix": [
+        [
+          3989,
+          811
+        ],
+        [
+          837,
+          3579
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.44380848190403777,
+      "val_pr_auc": 0.899393827024682,
+      "val_roc_auc": 0.9008565895736051,
+      "val_f1": 0.8053575286238929,
+      "val_official_brand_fp_rate": 0.2037037037037037,
+      "audit_official_https_mean_phish_proba": 0.3410465161626173
+    },
+    {
+      "model": "xgboost",
+      "accuracy": 0.8235677083333334,
+      "precision": 0.8069982394366197,
+      "recall": 0.8303894927536232,
+      "f1": 0.8185267857142857,
+      "roc_auc": 0.9064118168780193,
+      "confusion_matrix": [
+        [
+          3923,
+          877
+        ],
+        [
+          749,
+          3667
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.663165494799614,
+      "val_pr_auc": 0.9044474863774583,
+      "val_roc_auc": 0.9052759418319019,
+      "val_f1": 0.8162311451030381,
+      "val_official_brand_fp_rate": 0.30864197530864196,
+      "audit_official_https_mean_phish_proba": 0.5300760790705681
+    },
+    {
+      "model": "lightgbm",
+      "accuracy": 0.8266059027777778,
+      "precision": 0.8052426343154246,
+      "recall": 0.8417119565217391,
+      "f1": 0.8230735163861824,
+      "roc_auc": 0.9081003736413045,
+      "confusion_matrix": [
+        [
+          3901,
+          899
+        ],
+        [
+          699,
+          3717
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.605527852322486,
+      "val_pr_auc": 0.9083920563858574,
+      "val_roc_auc": 0.9107108693550914,
+      "val_f1": 0.8227339953517854,
+      "val_official_brand_fp_rate": 0.20987654320987653,
+      "audit_official_https_mean_phish_proba": 0.48724019679998476
+    }
+  ],
+  "selected_primary": "lightgbm",
+  "bundle": {
+    "selection_policy": "validated",
+    "train_csv_sha256": "6dec4ae6ddc30f3d5e8d5aa1e1f9b966171382d8d8135a9228e3c90d6b7f4535",
+    "n_fit_rows": 33731,
+    "n_validation_rows": 4903,
+    "n_test_rows": 9216,
+    "created_utc": "2026-09-30T06:11:50+00:00"
+  },
+  "official_brand_test_half": {
+    "n": 136,
+    "layer1_fp_rate": 0.3382352941176471,
+    "dashboard_verdicts": {
+      "uncertain": 136
+    }
+  },
+  "phishstats": {
+    "n": 284,
+    "layer1_recall": 0.795774647887324
+  },
+  "url_suites_dashboard_ml_only": {
+    "obvious_legit": {
+      "n": 6,
+      "verdicts": {
+        "uncertain": 6
+      }
+    },
+    "tricky_legit": {
+      "n": 6,
+      "verdicts": {
+        "uncertain": 6
+      }
+    },
+    "obvious_phish": {
+      "n": 2,
+      "verdicts": {
+        "likely_phishing": 2
+      }
+    },
+    "hard_phishing": {
+      "n": 4,
+      "verdicts": {
+        "likely_phishing": 4
+      }
+    }
+  },
+  "_provenance": {
+    "generated_utc": "2026-09-30T06:12:15+00:00",
+    "git_commit": "0ea50d9a7d7844e01766706e9f3decd9992763d6-dirty",
+    "code_trees": {
+      "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+      "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+      "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+      "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+    },
+    "seed": 42,
+    "environment": {
+      "python": "3.11.15",
+      "os": "Linux 6.18.44-fc-v50",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu_count": 2,
+      "ram_gb": 7.8,
+      "gpu": "none (CPU only)",
+      "packages": {
+        "numpy": "1.26.4",
+        "pandas": "2.3.3",
+        "scikit-learn": "1.5.1",
+        "xgboost": "2.1.4",
+        "lightgbm": "4.7.0",
+        "joblib": "1.4.2",
+        "tldextract": "5.3.2",
+        "pytest": "8.4.2",
+        "pytest-cov": "7.1.0",
+        "playwright": "1.49.0"
+      }
+    }
+  }
+}
