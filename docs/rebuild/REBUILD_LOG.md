@@ -153,7 +153,7 @@ While checking for undefined names, a latent bug surfaced: the full (non-Layer-1
 
 ---
 
-## 2026-09-30 · Phase 3: Retrain and evaluate (in progress)
+## 2026-09-30 · Phase 3: Retrain and evaluate
 
 ### Pre-registered decision: Tranco legitimate homepages (written before seeing any result)
 
@@ -167,3 +167,34 @@ To avoid picking whichever version happens to look best on the test set, the rul
   2. PR-AUC on the **Kaggle-origin rows** of the domain-grouped validation split.
 - **Adopt B only if** it lowers (1) by at least **5 percentage points** and does not lower (2) by more than **0.01**. Otherwise keep A.
 - Whichever wins is then evaluated once with `phishguard evaluate`. Both runs' validation numbers are reported here either way.
+
+### Tranco experiment result (decided by the rule above)
+
+| Run | Selected model | Official-brand validation false-alarm rate | Validation PR-AUC (Kaggle rows) |
+|---|---|---|---|
+| A: Kaggle only | XGBoost | 37.0% | 0.939 |
+| B: + 19,899 Tranco homepages | Random Forest | 40.1% | 0.858 |
+
+B made both criteria worse (false alarms up 3.1 points instead of down 5; PR-AUC down 0.081 instead of within 0.01), so **A is kept** and Tranco stays off by default. Likely reason: in this dataset about half the phishing rows are also bare hostnames, so thousands of "short homepage = legitimate" examples pull real phishing homepages toward legitimate. The option remains available (`phishguard train --extra-legit-tranco N`) for future experiments.
+
+### What was built
+
+- **`phishguard evaluate`** (`evaluation/evaluate.py`, `evaluation/report.py`): one command that reads a finished run and measures everything: held-out metrics for all four models plus a majority-class baseline with 1,000-sample bootstrap 95% CIs, the selected model at the app's own threshold, grouped 5-fold CV, the external sets (official brand test half, PhishStats), the real dashboard's verdicts on those sets, latency, and the test suite with coverage. It writes `metrics/results/evaluation.json` and renders `metrics/VERIFIED_METRICS.md` and `docs/MODEL_CARD.md` from it, so no number is typed by hand.
+- **`metrics/reproduce.sh`** is now two commands: `phishguard train --full`, then `phishguard evaluate --with-tests`. Measured: 1,316 seconds on 2 CPU cores.
+- **The full run no longer takes hours.** Layer-1 enrichment rewrote its whole checkpoint file every 400 rows; it now checkpoints every 50,000. Full training takes about 12 minutes.
+- **Run manifests for full runs.** The pipeline only recorded run mode and augmentation counts for sampled runs; it now always does.
+- The pre-rebuild audit moved to `metrics/audit_baseline/` with a README.
+
+### Final numbers (full run, commit `be39bd1`)
+
+All in `metrics/VERIFIED_METRICS.md`. Highlights: XGBoost held-out F1 0.801 (95% CI 0.799 to 0.803), ROC-AUC 0.880, on 147,702 URLs from unseen domains; grouped CV F1 0.828 ± 0.015; 365/365 tests pass.
+
+**Reproducibility check.** The final run was trained twice from scratch (once during development, once through `reproduce.sh` at a clean commit). Every held-out metric matched to the last digit.
+
+### Things the numbers taught us (honest notes)
+
+- **Lower than the 50K check, and that is expected.** The Phase 1 check (50K sample) gave F1 0.823 / ROC-AUC 0.908; the full run gives 0.801 / 0.880. The full test set is 16 times larger, and the 46,712 rows on the 38 evaluation domains (mostly famous sites like google.com and microsoft.com, which are easy legitimate examples) are removed. Grouped CV on 100,000 rows gives ROC-AUC 0.908 ± 0.016, so this single held-out split sits about 1.7 standard deviations below the CV mean (within normal split-to-split variation for grouped data).
+- **XGBoost was selected even though LightGBM has a slightly higher test F1** (0.803 vs 0.801). Selection looks only at validation data (XGBoost had the best validation PR-AUC, 0.938). Picking by test F1 would be using the test set to choose, which is the mistake this rebuild removed.
+- **Calibration currently hurts slightly.** The isotonic calibrator makes the test Brier score a bit worse (0.1408 raw vs 0.1455 calibrated). Open item: decide on validation data whether to keep it.
+- **The URL model alone is weak on famous sites.** Because every evaluation domain is removed from training, the model never sees google.com or amazon.com as legitimate, and Layer 1 flags them. The adjudication layer (which also has the official-domain registry) keeps them out of phishing verdicts. The in-browser demo (Phase 6) must show both layers, not the URL score alone.
+- **Without live capture, the dashboard is cautious**: it detects 24.3% of PhishStats URLs as `likely_phishing` and sends the rest to `uncertain`, with 0 false phishing verdicts on official brand URLs. Live capture (Phase 4) is what can move `uncertain` cases either way.

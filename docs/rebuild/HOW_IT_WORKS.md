@@ -1,4 +1,4 @@
-# How the project works (current state, after rebuild Phase 2)
+# How the project works (current state, after rebuild Phase 3)
 
 A plain-language map of the system. It is updated as the rebuild changes things; the dated history of each change is in [REBUILD_LOG.md](REBUILD_LOG.md).
 
@@ -51,7 +51,7 @@ Entry point: `phishguard train` (default 50,000-row sample; `--full` for all row
 
 ## Part 4: Verified numbers
 
-`metrics/` re-runs everything with seed 42 and writes each number with its command, commit and environment. `metrics/VERIFIED_METRICS.md` is the audit baseline (before the rebuild); `metrics/results/10_phase1_check.json` is the Phase 1 progress check. Only numbers from these files go on a resume or website.
+`phishguard evaluate` reads a trained run and writes every number with its command, commit, data hash and environment: `metrics/results/evaluation.json` (raw), `metrics/VERIFIED_METRICS.md` (readable) and `docs/MODEL_CARD.md`. `metrics/reproduce.sh` retrains and re-evaluates from scratch (about 25 minutes). Only numbers from these files go on a resume or website. The pre-rebuild audit lives in `metrics/audit_baseline/` and must not be quoted for the current system.
 
 ## Part 5: Code map
 

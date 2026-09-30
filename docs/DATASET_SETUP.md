@@ -34,7 +34,7 @@ phishguard train --sample-size 5000      # smoke
 phishguard train --sample-size 200000    # larger eval
 phishguard train --sample-frac 0.1       # 10% of deduped rows
 
-# Full ~796k rows (many hours of Layer-1 enrich)
+# Full ~796k rows (about 12 minutes end to end on 2 CPU cores)
 phishguard train --full
 
 # Reproducibility
@@ -55,7 +55,7 @@ Optional **`--limit`** still caps how many rows **enrich** processes after sampl
 | Larger eval | `--sample-size 200000` or `--sample-frac 0.25` | Better metrics, still bounded |
 | Production-scale | `--full` | All deduplicated URLs; plan overnight / cluster |
 
-**Layer-1 cost notes:** Enrichment is **URL parse + tldextract only** (no HTTP, no Playwright) unless you pass `--layer1-use-dns`. Checkpoints default to every **400** rows for Layer-1 to reduce disk I/O. `domain_hash_bucket` uses a **stable hash** (not Python’s `hash()`) so features are reproducible across processes.
+**Layer-1 cost notes:** Enrichment is **URL parse + tldextract only** (no HTTP, no Playwright) unless you pass `--layer1-use-dns`. Checkpoints default to every **50,000** rows for Layer-1 (the full dataset enriches in about 3 minutes). `domain_hash_bucket` uses a **stable hash** (not Python’s `hash()`) so features are reproducible across processes.
 
 Artifacts go to `data/processed/` and `outputs/` (gitignored).
 

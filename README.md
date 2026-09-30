@@ -90,19 +90,20 @@ Then open [http://localhost:8501](http://localhost:8501).
 
 ## Results
 
-Every number here was produced by re-running the code (seed 42) and is saved with its command, commit, data hash and environment in [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Regenerate with `bash metrics/reproduce.sh`.
+Every number here comes from `phishguard evaluate` (seed 42) and is saved with its command, commit, data hash and environment in [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Regenerate everything with `bash metrics/reproduce.sh` (about 25 minutes on 2 CPU cores). Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
 
-Layer-1 URL model, full Kaggle dataset (796,446 deduplicated URLs plus 837 curated legitimate URLs), held-out test of 140,057 rows from domains never seen in training, threshold 0.5:
+Layer-1 URL model, trained on the full Kaggle dataset (794,563 deduplicated URLs) and tested on 147,702 URLs from domains never seen in training (threshold 0.5):
 
-| Model | F1 | ROC-AUC | Precision | False-positive rate |
-|---|---|---|---|---|
-| Majority-class baseline | 0.000 | 0.500 | 0.000 | 0.0% |
-| LightGBM | 0.881 | 0.954 | 0.921 | 7.3% |
-| Random Forest | 0.864 | 0.940 | 0.936 | 5.6% |
+| Model | F1 (95% CI) | ROC-AUC | Precision | Recall | False-positive rate |
+|---|---|---|---|---|---|
+| Majority-class baseline | 0.000 | 0.500 | 0.000 | 0.000 | 0.0% |
+| **XGBoost (selected on validation data)** | 0.801 (0.799 to 0.803) | 0.880 | 0.772 | 0.832 | 21.3% |
+| Random Forest | 0.793 | 0.884 | 0.784 | 0.802 | 19.2% |
+| LightGBM | 0.803 | 0.877 | 0.764 | 0.847 | 22.7% |
 
-- Tests: 253 of 253 pass; 52% line coverage of `src/`.
-- Measured limits: on 298 curated official brand URLs, the Layer-1 models alone flag 35% to 54% as phishing. Without live capture, the adjudication layer returns `uncertain` for all 298 (none `likely_phishing`), and it returned `likely_legitimate` for none of the roughly 1,600 URLs tested that way.
-- The models currently in `outputs/models` came from `retrain_with_fresh.py`, whose split did not group scheme-less URLs by domain. See the metrics file before quoting those numbers.
+- Tests: 365 of 365 pass; 54.0% line coverage of `src/phishguard`.
+- Real-world checks (never in training): the URL model alone flags 40.4% of 136 official brand URLs and 81.0% of 284 PhishStats phishing URLs. The adjudication layer turns none of the official URLs into a phishing verdict (all go to `uncertain` without live capture).
+- These numbers replace an earlier audit of the original code, which had a leaky split; that record is in `metrics/audit_baseline/`.
 
 ## Known Limitations
 
