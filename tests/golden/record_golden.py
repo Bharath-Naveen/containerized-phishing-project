@@ -25,13 +25,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "src"))
 
 GOLDEN = HERE / "dashboard_golden.json"
 HTML_DIR = HERE / "html"
 
 
 def golden_urls() -> list:
-    from src.pipeline.evaluation_sets import (
+    from phishguard.data.eval_sets import (
         load_hard_legit_rows,
         load_official_brand_rows,
         load_phishstats_rows,
@@ -128,7 +129,7 @@ CAPTURE_CASES = {
 
 
 def make_capture(case: dict):
-    from src.app_v1.schemas import CaptureResult
+    from phishguard.app.schemas import CaptureResult
 
     html_path = ""
     if case.get("html") is not None:
@@ -191,8 +192,8 @@ def run_case(dash_module, url: str, ml: dict, agreement: dict, capture=None) -> 
 
 
 def main() -> None:
-    import src.app_v1.analyze_dashboard as dash
-    from src.app_v1.ml_layer1 import compute_layer1_model_agreement, predict_layer1
+    import phishguard.app.dashboard as dash
+    from phishguard.app.ml_layer1 import compute_layer1_model_agreement, predict_layer1
 
     cases = []
     for url in golden_urls():

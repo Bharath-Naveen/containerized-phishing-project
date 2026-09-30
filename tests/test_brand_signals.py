@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from src.pipeline.features.brand_signals import BRAND_TOKENS, host_on_official_brand_apex
-from src.pipeline.label_policy import phish_probability_from_proba_row
-from src.pipeline.layer1_features import extract_layer1_features
+from phishguard.features.brand_signals import BRAND_TOKENS, host_on_official_brand_apex
+from phishguard.data.labels import phish_probability_from_proba_row
+from phishguard.features.layer1 import extract_layer1_features
 
 
 def test_official_google_and_accounts() -> None:

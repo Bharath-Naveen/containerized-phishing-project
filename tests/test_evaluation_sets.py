@@ -1,6 +1,6 @@
 """Curated evaluation URL lists."""
 
-from src.pipeline.evaluation_sets import load_hard_legit_rows, load_simple_legit_rows, load_url_suites
+from phishguard.data.eval_sets import load_hard_legit_rows, load_simple_legit_rows, load_url_suites
 
 
 def test_hard_legit_load_default() -> None:

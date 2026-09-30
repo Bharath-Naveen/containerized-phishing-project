@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.analyze_dashboard import (
+from phishguard.app.dashboard import (
     _apply_capture_failure_verdict_hardening,
     _finalize_click_probe_diagnostics_on_capture,
     _merge_capture_failure_fields,
     build_dashboard_analysis,
     no_phishing_evidence_guard,
 )
-from src.app_v1.schemas import CaptureResult
+from phishguard.app.schemas import CaptureResult
 
 
 def test_merge_capture_failure_high_ml_moderate_suspicion() -> None:
@@ -143,9 +143,9 @@ def test_build_dashboard_capture_failure_evidence_gap() -> None:
     cfg = MagicMock()
     cfg.enable_click_probe = False
 
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 out, gaps = build_dashboard_analysis(
                     "https://evil-phish-login-verify.example/fake",
                     reinforcement=True,
@@ -189,9 +189,9 @@ def test_build_dashboard_click_probe_disabled_config() -> None:
     cfg = MagicMock()
     cfg.enable_click_probe = False
 
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 out, _gaps = build_dashboard_analysis(
                     "https://example.com/",
                     reinforcement=True,

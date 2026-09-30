@@ -5,11 +5,11 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.pipeline.guards import PipelineGuardError, check_feature_parity, check_group_keys, check_no_group_overlap
-from src.pipeline.layer1_features import extract_layer1_features
-from src.pipeline.safe_url import leak_safe_group_key
-from src.pipeline.train import LAYER1_EXCLUDE_FROM_X
-from src.pipeline.url_normalize import canonical_url, feature_url
+from phishguard.guards import PipelineGuardError, check_feature_parity, check_group_keys, check_no_group_overlap
+from phishguard.features.layer1 import extract_layer1_features
+from phishguard.urls.safe import leak_safe_group_key
+from phishguard.models.train import LAYER1_EXCLUDE_FROM_X
+from phishguard.urls.normalize import canonical_url, feature_url
 
 SAME_ADDRESS = [
     "summah.info/",
@@ -77,7 +77,7 @@ def test_parity_guard_detects_skew():
 
 
 def test_evaluation_urls_are_excluded_from_training():
-    from src.pipeline.evaluation_sets import drop_evaluation_rows, load_url_suites
+    from phishguard.data.eval_sets import drop_evaluation_rows, load_url_suites
 
     urls = [u for v in load_url_suites().values() for u in v] + ["http://some-unrelated-site.org/x"]
     df = pd.DataFrame({"canonical_url": [canonical_url(u)[0] for u in urls]})
@@ -88,7 +88,7 @@ def test_evaluation_urls_are_excluded_from_training():
 
 def test_obvious_phishing_is_not_softened_to_uncertain_without_capture():
     """Audit repro: raw ML ~0.97 on these, but the EAL returned 'uncertain'."""
-    from src.app_v1.host_path_reasoning import assess_host_path_reasoning
+    from phishguard.app.host_path_reasoning import assess_host_path_reasoning
 
     for u in ("https://google-login-secure.xyz/signin", "https://totally-fake-bank-login.xyz/verify"):
         hp = assess_host_path_reasoning(input_url=u)["host_path_reasoning"]
@@ -96,7 +96,7 @@ def test_obvious_phishing_is_not_softened_to_uncertain_without_capture():
 
 
 def test_official_and_ordinary_hosts_not_flagged_by_new_host_rules():
-    from src.app_v1.host_path_reasoning import assess_host_path_reasoning
+    from phishguard.app.host_path_reasoning import assess_host_path_reasoning
 
     for u in ("https://accounts.google.com/signin", "https://www.paypal.com/signin", "https://github.com/login",
               "https://www.wikipedia.org/", "https://secure.bankofamerica.com/login", "https://mybank-online.com/"):

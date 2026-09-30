@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.pipeline.paths import models_dir, reports_dir
+from phishguard.paths import models_dir, reports_dir
 
 
 def test_layer1_model_predict_if_exists() -> None:
@@ -11,7 +11,7 @@ def test_layer1_model_predict_if_exists() -> None:
     if not model.is_file() or not cfg.is_file():
         pytest.skip("No trained model or training_config (run pipeline first)")
 
-    from src.app_v1.ml_layer1 import predict_layer1
+    from phishguard.app.ml_layer1 import predict_layer1
 
     out = predict_layer1("https://example.com/path", model_path=model)
     assert out.get("phish_proba") is not None

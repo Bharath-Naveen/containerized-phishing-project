@@ -1,10 +1,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.analyze_dashboard import _apply_evidence_adjudication_layer
-from src.app_v1.analyze_dashboard import build_dashboard_analysis
-from src.app_v1.behavior_signals import extract_behavior_signals
-from src.app_v1.schemas import CaptureResult
+from phishguard.app.dashboard import _apply_evidence_adjudication_layer
+from phishguard.app.dashboard import build_dashboard_analysis
+from phishguard.app.behavior_signals import extract_behavior_signals
+from phishguard.app.schemas import CaptureResult
 
 
 def _base_verdict(score: float = 0.55) -> dict:
@@ -217,9 +217,9 @@ def test_build_dashboard_analysis_uses_network_request_urls_for_behavior_signals
     }
     cfg = MagicMock()
     cfg.enable_click_probe = False
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake_cap):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake_cap):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 out, _ = build_dashboard_analysis("https://example.com", reinforcement=True)
     behavior = out.get("behavior_signals") or {}
     assert behavior.get("network_request_domain_count", 0) >= 2

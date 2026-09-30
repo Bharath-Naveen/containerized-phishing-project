@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.analyze_dashboard import _apply_ml_phishing_capture_miss_legitimacy_safety, build_dashboard_analysis
-from src.app_v1.schemas import CaptureResult
-from src.app_v1.verdict_policy import Verdict3WayConfig
+from phishguard.app.dashboard import _apply_ml_phishing_capture_miss_legitimacy_safety, build_dashboard_analysis
+from phishguard.app.schemas import CaptureResult
+from phishguard.app.verdict_policy import Verdict3WayConfig
 
 
 def _base_verdict_legit(combined: float) -> dict:
@@ -149,10 +149,10 @@ def test_deterministic_safety_with_ai_disabled_after_no_phishing_override() -> N
     cfg = MagicMock()
     cfg.enable_click_probe = False
 
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
-                with patch("src.app_v1.analyze_dashboard.no_phishing_evidence_guard", return_value=True):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
+                with patch("phishguard.app.dashboard.no_phishing_evidence_guard", return_value=True):
                     out, _gaps = build_dashboard_analysis(
                         "https://evil-phish-login-verify.example/fake",
                         reinforcement=True,

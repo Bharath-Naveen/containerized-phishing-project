@@ -30,10 +30,10 @@ from sklearn.isotonic import IsotonicRegression  # noqa: E402
 from sklearn.metrics import brier_score_loss  # noqa: E402
 from sklearn.model_selection import train_test_split  # noqa: E402
 
-from src.pipeline import train as T  # noqa: E402
-from src.pipeline.clean import canonicalize_url  # noqa: E402
-from src.pipeline.layer1_features import extract_layer1_features  # noqa: E402
-from src.pipeline.safe_url import leak_safe_group_key  # noqa: E402
+from phishguard import train as T  # noqa: E402
+from phishguard.data.clean import canonicalize_url  # noqa: E402
+from phishguard.features.layer1 import extract_layer1_features  # noqa: E402
+from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "scripts" / "02_evaluate_layer1.py")
 ev = importlib.util.module_from_spec(_spec)

@@ -17,12 +17,7 @@ _data = json.loads(GOLDEN.read_text(encoding="utf-8")) if GOLDEN.is_file() else 
 
 
 def _dashboard_module():
-    for name in ("src.phishguard.app.dashboard", "src.app_v1.analyze_dashboard"):
-        try:
-            return importlib.import_module(name)
-        except ModuleNotFoundError:
-            continue
-    raise ImportError("dashboard module not found")
+    return importlib.import_module("phishguard.app.dashboard")
 
 
 @pytest.mark.parametrize("case", _data["cases"], ids=lambda c: c.get("name") or c["url"][:60])

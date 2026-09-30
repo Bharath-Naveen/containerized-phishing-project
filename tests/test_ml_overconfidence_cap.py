@@ -1,4 +1,4 @@
-from src.app_v1.analyze_dashboard import _apply_ml_overconfidence_cap
+from phishguard.app.dashboard import _apply_ml_overconfidence_cap
 
 
 def _base_cap() -> dict:

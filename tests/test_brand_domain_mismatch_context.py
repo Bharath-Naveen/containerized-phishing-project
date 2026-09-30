@@ -1,4 +1,4 @@
-from src.app_v1.analyze_dashboard import _compute_phishing_blockers, _enrich_capture_and_html_signals
+from phishguard.app.dashboard import _compute_phishing_blockers, _enrich_capture_and_html_signals
 
 
 def _safe_bundle() -> dict:

@@ -1,6 +1,6 @@
 """Step 6: the full deduplicated Kaggle run (~796K rows) through the documented pipeline.
 
-Uses src.pipeline.run_kaggle_pipeline(full_dataset=True) unchanged, except for one runtime argument
+Uses phishguard.pipelines.kaggle(full_dataset=True) unchanged, except for one runtime argument
 the function already exposes: checkpoint_every=10**9. The default checkpoint rewrites the whole
 enrichment CSV every 400 rows, which is what makes --full take "many hours". Output features are
 identical; only the number of intermediate writes changes.
@@ -32,12 +32,12 @@ import joblib  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from src.pipeline import train as T  # noqa: E402
-from src.pipeline.clean import canonicalize_url  # noqa: E402
-from src.pipeline.layer1_features import extract_layer1_features  # noqa: E402
-from src.pipeline.logging_util import setup_logging  # noqa: E402
-from src.pipeline.run_kaggle_pipeline import run_kaggle_pipeline  # noqa: E402
-from src.pipeline.safe_url import leak_safe_group_key  # noqa: E402
+from phishguard import train as T  # noqa: E402
+from phishguard.data.clean import canonicalize_url  # noqa: E402
+from phishguard.features.layer1 import extract_layer1_features  # noqa: E402
+from phishguard.logging_util import setup_logging  # noqa: E402
+from phishguard.pipelines.kaggle import run_kaggle_pipeline  # noqa: E402
+from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "scripts" / "02_evaluate_layer1.py")
 ev = importlib.util.module_from_spec(_spec)

@@ -1,7 +1,7 @@
 """Simple-legitimate surface URL features (path depth, auth tokens, redirect query keys)."""
 
-from src.pipeline.features.url_features import extract_url_features
-from src.pipeline.layer1_features import extract_layer1_features
+from phishguard.features.url_features import extract_url_features
+from phishguard.features.layer1 import extract_layer1_features
 
 
 def test_homepage_shallow_path_google() -> None:

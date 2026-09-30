@@ -31,10 +31,10 @@ import joblib  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from src.pipeline import train as T  # noqa: E402
-from src.pipeline.evaluation_sets import load_hard_legit_rows, load_url_suites  # noqa: E402
-from src.pipeline.layer1_features import extract_layer1_features  # noqa: E402
-from src.pipeline.safe_url import leak_safe_group_key  # noqa: E402
+from phishguard import train as T  # noqa: E402
+from phishguard.data.eval_sets import load_hard_legit_rows, load_url_suites  # noqa: E402
+from phishguard.features.layer1 import extract_layer1_features  # noqa: E402
+from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("ev", REPO / "metrics" / "scripts" / "02_evaluate_layer1.py")
 ev = importlib.util.module_from_spec(_spec)
@@ -77,7 +77,7 @@ def run_train(name: str, train_csv, test_csv) -> dict:
     (vdir / "outputs").mkdir(parents=True)
     env = dict(os.environ, PHISH_OUTPUTS_DIR=str(vdir / "outputs"), PHISH_LOGS_DIR=str(vdir / "logs"))
     subprocess.run(
-        [sys.executable, "-m", "src.pipeline.train", "--train", str(train_csv), "--test", str(test_csv), "--layer1-only"],
+        [sys.executable, "-m", "phishguard.models.train", "--train", str(train_csv), "--test", str(test_csv), "--layer1-only"],
         cwd=REPO, env=env, check=True,
     )
     return evaluate_variant(vdir / "outputs", test_csv, train_csv)

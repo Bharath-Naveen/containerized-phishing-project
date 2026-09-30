@@ -24,9 +24,9 @@ seed_everything()
 import joblib  # noqa: E402
 import numpy as np  # noqa: E402
 
-from src.pipeline.evaluation_sets import load_official_brand_rows, load_phishstats_rows, load_url_suites  # noqa: E402
-from src.pipeline.logging_util import setup_logging  # noqa: E402
-from src.pipeline.run_kaggle_pipeline import run_kaggle_pipeline  # noqa: E402
+from phishguard.data.eval_sets import load_official_brand_rows, load_phishstats_rows, load_url_suites  # noqa: E402
+from phishguard.logging_util import setup_logging  # noqa: E402
+from phishguard.pipelines.kaggle import run_kaggle_pipeline  # noqa: E402
 
 
 def main() -> None:
@@ -41,8 +41,8 @@ def main() -> None:
     metrics = json.loads((out / "metrics" / "metrics.json").read_text())
     bundle = joblib.load(out / "models" / "layer1_bundle.joblib")
 
-    from src.app_v1.analyze_dashboard import build_dashboard_analysis
-    from src.app_v1.ml_layer1 import predict_layer1
+    from phishguard.app.dashboard import build_dashboard_analysis
+    from phishguard.app.ml_layer1 import predict_layer1
 
     def l1_flags(urls):
         return [bool(predict_layer1(u).get("predicted_phishing")) for u in urls]

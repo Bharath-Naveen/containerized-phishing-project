@@ -33,8 +33,9 @@ def isolate_env() -> None:
     for d in ("data", "outputs", "logs"):
         (WORK / d).mkdir(parents=True, exist_ok=True)
     RESULTS.mkdir(parents=True, exist_ok=True)
-    if str(REPO) not in sys.path:
-        sys.path.insert(0, str(REPO))
+    for p in (str(REPO / "src"), str(REPO)):
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
 
 def seed_everything() -> None:

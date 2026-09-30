@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
 from unittest.mock import patch
 
-from src.pipeline.deploy_layer1_primary import deploy_latest_selected_layer1_primary
+from phishguard.models.deploy import deploy_latest_selected_layer1_primary
 
 
 def _write_summary(base: Path, run_dir: Path) -> Path:
@@ -37,9 +37,9 @@ def test_deploy_latest_selected_primary_with_backup(tmp_path: Path) -> None:
     current = deploy_models / "layer1_primary.joblib"
     current.write_bytes(b"old-primary")
 
-    with patch("src.pipeline.deploy_layer1_primary.models_dir", return_value=deploy_models):
+    with patch("phishguard.models.deploy.models_dir", return_value=deploy_models):
         with patch(
-            "src.pipeline.deploy_layer1_primary.predict_layer1",
+            "phishguard.models.deploy.predict_layer1",
             return_value={"error": None, "model_path": str(current), "phish_proba": 0.5},
         ):
             out = deploy_latest_selected_layer1_primary(summary_path=summary_path)
@@ -63,7 +63,7 @@ def test_deploy_fails_when_selected_artifact_missing(tmp_path: Path) -> None:
     deploy_models = tmp_path / "deploy_models"
     deploy_models.mkdir(parents=True)
 
-    with patch("src.pipeline.deploy_layer1_primary.models_dir", return_value=deploy_models):
+    with patch("phishguard.models.deploy.models_dir", return_value=deploy_models):
         try:
             deploy_latest_selected_layer1_primary(summary_path=summary_path)
             assert False, "expected FileNotFoundError"

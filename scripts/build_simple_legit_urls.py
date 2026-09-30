@@ -14,8 +14,9 @@ from typing import Dict, List, Set, Tuple
 _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
+    sys.path.insert(0, str(_REPO / "src"))
 
-from src.pipeline.clean import canonicalize_url
+from phishguard.data.clean import canonicalize_url
 
 OutRow = Tuple[str, str]  # url, category
 

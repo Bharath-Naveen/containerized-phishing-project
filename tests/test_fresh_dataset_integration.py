@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.pipeline.fresh_dataset import load_and_merge_fresh_dataset
+from phishguard.data.fresh_merge import load_and_merge_fresh_dataset
 
 
 def test_fresh_dataset_merge_converts_to_kaggle_status_and_internal_label(tmp_path, monkeypatch) -> None:

@@ -2,14 +2,14 @@
 
 import pytest
 
-from src.pipeline.paths import models_dir, reports_dir
+from phishguard.paths import models_dir, reports_dir
 
 
 def test_run_phish_audit_writes_json_and_has_regression_keys() -> None:
     if not (models_dir() / "layer1_primary.joblib").is_file():
         pytest.skip("No layer1_primary.joblib")
 
-    from src.pipeline.phish_audit import OUTPUT_JSON, run_phish_audit
+    from phishguard.evaluation.phish_audit import OUTPUT_JSON, run_phish_audit
 
     rep = run_phish_audit(reinforcement=False, layer1_use_dns=False)
     assert "summary" in rep

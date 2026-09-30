@@ -49,7 +49,7 @@ def kaggle_sample(variant: str) -> list:
 
 
 def build_items(variant: str, include_simple: bool) -> list:
-    from src.pipeline.evaluation_sets import load_hard_legit_rows, load_url_suites
+    from phishguard.data.eval_sets import load_hard_legit_rows, load_url_suites
 
     items = []
     for name, urls in load_url_suites().items():
@@ -66,8 +66,8 @@ def build_items(variant: str, include_simple: bool) -> list:
 
 
 def worker(variant: str, include_simple: bool, out_path: str) -> None:
-    from src.app_v1.analyze_dashboard import build_dashboard_analysis
-    from src.app_v1.ml_layer1 import predict_layer1
+    from phishguard.app.dashboard import build_dashboard_analysis
+    from phishguard.app.ml_layer1 import predict_layer1
 
     items = build_items(variant, include_simple)
     build_dashboard_analysis("https://example.com/", reinforcement=False)  # warm-up (model load)

@@ -1,6 +1,6 @@
 """Three-way verdict thresholds."""
 
-from src.app_v1.verdict_policy import Verdict3WayConfig, verdict_3way
+from phishguard.app.verdict_policy import Verdict3WayConfig, verdict_3way
 
 
 def test_verdict_three_bands() -> None:

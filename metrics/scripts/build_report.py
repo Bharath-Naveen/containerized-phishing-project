@@ -140,10 +140,10 @@ def build():
                     f"n={dsh['n']}, reinforcement=False, includes 4-model agreement", "python metrics/scripts/04_suites_and_fp.py", source="04_suites_and_fp.json")
     add("Latency", "Full path with Playwright live capture", "NOT RUN",
         "verification sandbox has no general internet egress (only package registries); needs a machine with internet",
-        "python -m src.app_v1.analyze_dashboard --url <url>", status="NOT RUN")
+        "python -m phishguard.app.dashboard --url <url>", status="NOT RUN")
     add("Ablations", "Legitimacy rescue FP delta with live capture", "NOT RUN",
         "rescue conditions depend on redirect chain, form targets and DOM risk from Playwright capture; no internet egress here",
-        "PHISH_LEGITIMACY_RESCUE_ENABLED=false python -m src.pipeline.fp_audit --reinforcement", status="NOT RUN")
+        "PHISH_LEGITIMACY_RESCUE_ENABLED=false python -m phishguard.evaluation.fp_audit --reinforcement", status="NOT RUN")
     add("Ablations", "EAL edge-case validation (15 live URLs in outputs/reports/eal_edge_case_validation.md)", "NOT RUN",
         "needs live Playwright capture of real sites; no internet egress in the verification sandbox",
         "see outputs/reports/eal_edge_case_validation.md", status="NOT RUN")
@@ -268,7 +268,7 @@ def write():
         "## How to read this",
         "",
         "- The audit ran on a clean clone of GitHub `main`; its `src/`, `tests/`, `data/evaluation/` and `requirements.txt` trees are byte-identical to the local commit `4cb3d6b` (that commit only adds docs/BUILD_STORY.md). The code-tree hashes above let you check this with `git rev-parse HEAD:src`.",
-        "- 50K default run: the documented default (`python -m src.pipeline.run_kaggle_pipeline`), Kaggle only, re-run from scratch here.",
+        "- 50K default run: the documented default (`python -m phishguard.pipelines.kaggle`), Kaggle only, re-run from scratch here.",
         "- Deployed models: the four `.joblib` files the app loads today (500K-row run 20260427_234728, byte-identical to that run's folder). They were re-scored on that run's saved held-out split, not retrained.",
         "- Dashboard verdict rows use the ML-only path (`reinforcement=False`). Live Playwright capture could not run in the verification sandbox.",
         "- Several curated evaluation URLs are also added to training by `simple_legit_augment` (see Ablations). Treat suite and hard-legit pass rates for the as-is and deployed models as in-sample.",

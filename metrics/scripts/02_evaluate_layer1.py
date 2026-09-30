@@ -30,9 +30,9 @@ from sklearn.metrics import (  # noqa: E402
 )
 from sklearn.model_selection import StratifiedGroupKFold, train_test_split  # noqa: E402
 
-from src.pipeline import train as T  # noqa: E402
-from src.pipeline.label_policy import phish_probability_from_proba_row  # noqa: E402
-from src.pipeline.safe_url import leak_safe_group_key  # noqa: E402
+from phishguard import train as T  # noqa: E402
+from phishguard.data.labels import phish_probability_from_proba_row  # noqa: E402
+from phishguard.urls.safe import leak_safe_group_key  # noqa: E402
 
 MODELS = ["logistic_regression", "random_forest", "xgboost", "lightgbm"]
 N_BOOT = 1000

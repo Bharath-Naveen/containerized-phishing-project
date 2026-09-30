@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.analyze_dashboard import _apply_evidence_adjudication_layer, build_dashboard_analysis
-from src.app_v1.ml_layer1 import build_model_agreement_from_outputs
+from phishguard.app.dashboard import _apply_evidence_adjudication_layer, build_dashboard_analysis
+from phishguard.app.ml_layer1 import build_model_agreement_from_outputs
 
 
 def _row(name: str, p: float) -> dict:
@@ -338,11 +338,11 @@ def test_no_probability_averaging_in_dashboard_pipeline() -> None:
     fake.error = ""
     fake.capture_blocked = False
     fake.capture_strategy = "http_fallback"
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 with patch(
-                    "src.app_v1.analyze_dashboard.compute_layer1_model_agreement",
+                    "phishguard.app.dashboard.compute_layer1_model_agreement",
                     return_value=fake_agreement,
                 ):
                     out, _ = build_dashboard_analysis("https://www.example.com", reinforcement=True)
@@ -377,11 +377,11 @@ def test_primary_only_build_dashboard_still_runs() -> None:
     fake.error = ""
     fake.capture_blocked = False
     fake.capture_strategy = "http_fallback"
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 with patch(
-                    "src.app_v1.analyze_dashboard.compute_layer1_model_agreement",
+                    "phishguard.app.dashboard.compute_layer1_model_agreement",
                     return_value=empty_agreement,
                 ):
                     out, _ = build_dashboard_analysis("https://www.example.com", reinforcement=True)

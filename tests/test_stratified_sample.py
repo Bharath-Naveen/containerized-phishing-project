@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from src.pipeline.stratified_sample import stratified_sample_by_label
+from phishguard.data.sample import stratified_sample_by_label
 
 
 def test_stratified_sample_n_preserves_both_classes() -> None:

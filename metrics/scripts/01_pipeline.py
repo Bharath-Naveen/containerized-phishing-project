@@ -18,8 +18,8 @@ seed_everything()
 
 import pandas as pd  # noqa: E402
 
-from src.pipeline.logging_util import setup_logging  # noqa: E402
-from src.pipeline.run_kaggle_pipeline import run_kaggle_pipeline  # noqa: E402
+from phishguard.logging_util import setup_logging  # noqa: E402
+from phishguard.pipelines.kaggle import run_kaggle_pipeline  # noqa: E402
 
 
 def main() -> None:
@@ -64,7 +64,7 @@ def main() -> None:
         "01_pipeline",
         {
             "command": f"python metrics/scripts/01_pipeline.py --sample-size {args.sample_size}",
-            "pipeline_entrypoint": "src.pipeline.run_kaggle_pipeline.run_kaggle_pipeline (repo code, unmodified)",
+            "pipeline_entrypoint": "phishguard.pipelines.kaggle.run_kaggle_pipeline (repo code, unmodified)",
             "end_to_end_runtime_seconds": round(runtime_s, 1),
             "raw_dataset": raw_stats,
             "dedup": {k: v for k, v in clean_stats.items() if k not in ("input", "output")},
