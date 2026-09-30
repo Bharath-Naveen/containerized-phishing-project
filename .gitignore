@@ -87,3 +87,4 @@ metrics/_work/
 # --- runtime reference registries (tiny, required by the app and by tests) ---
 !data/reference/
 !data/reference/*.csv
+*.egg-info/

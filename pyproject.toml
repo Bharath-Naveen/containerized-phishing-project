@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phishguard"
+version = "0.2.0"
+description = "Explainable phishing URL detection: Layer-1 ML triage, live capture evidence and a deterministic adjudication layer"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Bharath Naveen" }]
+# Runtime dependencies are pinned in requirements.txt (the Docker image uses that file).
+dependencies = []
+
+[project.scripts]
+phishguard = "phishguard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+phishguard = ["py.typed"]

@@ -1,4 +1,4 @@
-# Frontend Guide (`src/app_v1/frontend.py`)
+# Frontend Guide (`src/phishguard/app/frontend.py`)
 
 This guide explains how to run and interpret the Streamlit dashboard.
 
@@ -7,7 +7,7 @@ This guide explains how to run and interpret the Streamlit dashboard.
 From repository root:
 
 ```bash
-streamlit run src/app_v1/frontend.py
+phishguard serve
 ```
 
 Or with Docker:
@@ -19,7 +19,7 @@ docker compose up
 The frontend shells out to:
 
 ```bash
-python -m src.app_v1.analyze_dashboard --url <URL>
+phishguard analyze --url <URL>
 ```
 
 ## Inputs
@@ -98,7 +98,7 @@ Deterministic evidence adjudication output:
 ## Troubleshooting
 
 - No output / process failure:
-  - run CLI directly: `python -m src.app_v1.analyze_dashboard --url "https://example.com"`
+  - run CLI directly: `phishguard analyze --url "https://example.com"`
 - Incomplete reinforcement:
   - check Docker/network and capture strategy in output.
 - No API key is required for standard dashboard operation.

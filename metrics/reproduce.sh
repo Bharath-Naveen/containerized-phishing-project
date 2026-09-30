@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONHASHSEED=42
-export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$PWD/src:$PWD${PYTHONPATH:+:$PYTHONPATH}"
 pip install -q "pytest-cov>=5" >/dev/null 2>&1 || true
 
 python metrics/scripts/00_tests.py            # pytest counts + coverage

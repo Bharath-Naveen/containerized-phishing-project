@@ -1,5 +1,7 @@
 # Build story: Evidence Adjudication Layer (EAL)
 
+> Note (rebuild, 2026-09-30): this story describes the code before the Phase 2 restructure. `src/app_v1/analyze_dashboard.py` is now split across `src/phishguard/app/` (`dashboard.py`, `eal.py`, `verdict_rules.py`, `registries.py`, ...). See `docs/rebuild/HOW_IT_WORKS.md`.
+
 ## What this system is (one paragraph for interviews)
 
 This is a **containerized phishing detection dashboard** that does not treat a single ML score as the verdict. Layer 1 is URL/host ML (primary Random Forest trained at ~500k scale, plus witness models for **model agreement**). Layer 2 is **Playwright** live capture (redirects, TLS, network requests). Layer 3 is HTML/DOM structure, host/path reasoning, platform context, JS/network behavior, brand-domain coherence, and a small **official-domain trust-prior** registry—not a whitelist. The **Evidence Adjudication Layer (EAL)** in `analyze_dashboard.py` aggregates evidence into phishing, legitimacy, and ambiguity signals, applies **hard blockers**, then picks a 3-way label: `likely_phishing`, `uncertain`, or `likely_legitimate`. Runtime **AI adjudication was removed**; deployment is deterministic and test-driven.

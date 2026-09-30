@@ -1,6 +1,6 @@
 # Scripts
 
-Optional developer helpers (the main entrypoints remain `python -m src.pipeline.*` and `streamlit run …`).
+Optional developer helpers (the main entrypoints remain `python -m phishguard.*` and `streamlit run …`).
 
 | Script | Purpose |
 |--------|---------|

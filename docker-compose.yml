@@ -17,7 +17,7 @@ services:
     ports:
       - "8501:8501"
     environment:
-      PYTHONPATH: /app:/app/src
+      PYTHONPATH: /app/src
       PHISH_PROJECT_ROOT: /app
       PHISH_DATA_DIR: /app/data
       PHISH_OUTPUTS_DIR: /app/outputs
@@ -32,7 +32,7 @@ services:
     command:
       - streamlit
       - run
-      - src/app_v1/frontend.py
+      - src/phishguard/app/frontend.py
       - --server.address=0.0.0.0
       - --server.port=8501
 
@@ -41,7 +41,7 @@ services:
     build: .
     image: phishing-triage:app-v1
     environment:
-      PYTHONPATH: /app:/app/src
+      PYTHONPATH: /app/src
       PHISH_PROJECT_ROOT: /app
       PHISH_DATA_DIR: /app/data
       PHISH_OUTPUTS_DIR: /app/outputs

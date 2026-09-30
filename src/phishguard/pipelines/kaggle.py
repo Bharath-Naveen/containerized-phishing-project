@@ -32,7 +32,7 @@ from phishguard.models.train import train
 logger = logging.getLogger(__name__)
 
 # Default experiment size when not using --full (fast iteration on ~796k-row Kaggle dumps).
-DEFAULT_STRATIFIED_SAMPLE_SIZE = 50_000
+from phishguard.config import DEFAULT_SAMPLE_SIZE as DEFAULT_STRATIFIED_SAMPLE_SIZE  # noqa: E402
 FRESH_SOURCE_DATASET = "fresh_phishstats_extension"
 
 

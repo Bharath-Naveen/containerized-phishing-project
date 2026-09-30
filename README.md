@@ -49,17 +49,20 @@ The runtime path is deterministic. AI adjudication is removed/disabled.
 ### Local Python run
 
 ```powershell
-$env:PYTHONPATH = "$PWD"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run src/app_v1/frontend.py
+pip install -e .            # installs the `phishguard` command
+phishguard serve            # Streamlit dashboard on http://localhost:8501
 ```
 
-CLI one-off analysis:
+One command for everything:
 
 ```powershell
-python -m src.app_v1.analyze_dashboard --url "https://example.com"
+phishguard analyze --url "https://example.com"   # score one URL (add --no-reinforcement for ML-only)
+phishguard train                                 # train on a 50K stratified Kaggle sample (--full for all rows)
+phishguard evaluate                              # curated URL-suite benchmark
+phishguard deploy                                # ship the latest trained model bundle
 ```
 
 ### Docker run
@@ -115,19 +118,27 @@ Layer-1 URL model, full Kaggle dataset (796,446 deduplicated URLs plus 837 curat
 - Expose port `8501` and secure access (HTTPS + auth/network controls) before sharing publicly.
 - Never store secrets in repo files or compose files.
 
-## Suggested Repo Layout (Deployment-Ready)
+## Repo Layout
 
 ```text
 .
-├── src/                      # Runtime + pipeline code
-├── tests/                    # Regression tests
-├── docs/                     # Design and operational docs
-├── data/
-│   ├── official_domains.json # curated trust-prior registry (kept)
-│   ├── raw/ interim/ processed/ (runtime/training data, gitignored)
-├── models/                   # optional demo artifacts
-├── Dockerfile
-├── docker-compose.yml
+├── src/phishguard/
+│   ├── urls/          # URL parsing + the one canonical/scheme-neutral normalizer
+│   ├── data/          # Kaggle ingest, clean, sample, evaluation sets, enrich, domain-grouped split
+│   ├── features/      # Layer-1 URL/host features
+│   ├── models/        # training (validated selection, model bundle), deploy
+│   ├── pipelines/     # end-to-end training pipelines (phishguard train)
+│   ├── evaluation/    # URL suites, false-positive / phishing audits, reports
+│   ├── app/           # dashboard, EAL, capture, signals, Streamlit UI
+│   ├── guards.py      # checks that stop leaky splits and train/serve skew
+│   ├── config.py      # seed and defaults
+│   └── cli.py         # the phishguard command
+├── tests/             # unit, regression and golden-output tests
+├── metrics/           # verified, reproducible metrics (see Results)
+├── docs/rebuild/      # how it works + rebuild log
+├── data/              # evaluation sets + registries (tracked); raw/processed data (gitignored)
+├── archive/legacy/    # retired AI adjudication path and old scripts
+├── Dockerfile, docker-compose.yml, pyproject.toml
 └── README.md
 ```
 
@@ -139,11 +150,12 @@ Generated runtime artifacts should remain untracked:
 - `data/processed/`
 - temporary CSV/JSONL exports
 
-## Useful Commands
+## Tests
 
 ```bash
-# targeted regression set used for deployment checks
-pytest tests/test_evidence_adjudication_layer.py tests/test_hosting_domain_trust_layer.py tests/test_ml_model_agreement.py tests/test_behavior_signals.py -q
+pytest            # full suite, including golden-output tests that pin the dashboard's behavior
 ```
 
-# This project is under review and will be rebuild after planning
+## Rebuild in progress
+
+This project is being rebuilt for verified, reproducible results. What changed and why: [docs/rebuild/REBUILD_LOG.md](docs/rebuild/REBUILD_LOG.md). How the system works: [docs/rebuild/HOW_IT_WORKS.md](docs/rebuild/HOW_IT_WORKS.md).
