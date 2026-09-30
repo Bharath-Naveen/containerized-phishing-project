@@ -247,3 +247,29 @@ Fixes made after this run:
 - Pushing these changes re-runs the live workflow automatically.
 
 Not fixed on purpose: findings 1 to 3 are changes to the adjudication rules. Tuning them while looking at the official-brand **test** half would be tuning on the test set. The honest way is to tune on the **validation** half and confirm once on the test half; that is proposed as the next step.
+
+### Second live run (GitHub Actions run 36758082929, commit `0014d21`)
+
+304 URLs. This time the phishing feed worked (PhishStats answered; the OpenPhish fallback was not needed) and 17 popular-list domains with no website were skipped.
+
+| What | Run 1 | Run 2 |
+|---|---|---|
+| Official brand URLs (test half), `likely_phishing` | 8 of 136 | 8 of 136 (same 8 pages) |
+| All legitimate URLs, `likely_phishing` | 33 of 233 | 25 of 233 |
+| of which: capture failed | 19 | 8 |
+| of which: wrapper/interstitial blocker | 9 | 10 |
+| of which: credential-harvesting blocker | 4 | 4 |
+| Popular homepages (Tranco) pass rate | 63.3% | 76.7% (86.8% when the page loaded) |
+| Fresh phishing URLs called `likely_phishing` | not tested | **22 of 60 (36.7%)** |
+| Fresh phishing URLs called `likely_legitimate` | not tested | **25 of 60** |
+| Rescue layer changed a verdict | 0 of 244 | 0 of 304 |
+| Full-path latency p50 / p95 | 7.1 s / 16.1 s | 6.8 s / 15.0 s |
+| Live edge cases | 13 of 15 | 13 of 15 (same two Weebly pages `uncertain`) |
+
+The new and most important finding is **recall on fresh phishing is low**. The URL model alone put 44 of the 60 above 0.5, but the full system called only 22 phishing and called 25 legitimate. So on this sample the page-level rules lower recall rather than raise it. Looking at the 25:
+
+- 7 had a URL score of 0.8 or higher and were still called legitimate (for example pages on godaddysites.com, square.site, ukit.me, edgeone.dev). These are site-builder pages where the capture did not show a login form, and the rules read "clean page on a known platform" as safe.
+- About 10 are the same kit (`/?email=a@a.com&uid=...` and `/point/download/` on random domains). They almost certainly show a harmless page to a data-center browser (cloaking), so the capture never sees the phishing content.
+- A few feed entries are not phishing pages at all by the time of capture: real login or captcha pages the phish redirected to (yandex.ru captcha, id.superhuman.com, login.account.rakuten.com, att.com). Feed labels are "reported as phishing", not ground truth.
+
+What this means for claims: the full system's value today is **low false alarms on real brand sites** (8 of 136 flagged), not catching fresh phishing. "Catches X% of live phishing" cannot be claimed. Any tuning must be judged on both sides at once: fewer false alarms on legitimate login pages *and* no further loss of fresh-phishing recall.
