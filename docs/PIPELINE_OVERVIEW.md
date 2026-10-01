@@ -1,4 +1,4 @@
-# Pipeline Overview (`src/pipeline`)
+# Pipeline Overview (`src/phishguard`)
 
 This document summarizes the training/evaluation pipeline used by the project.
 
@@ -9,7 +9,7 @@ Train and evaluate Layer-1 phishing triage model from URL/host-centric features,
 ## Main Entry Point
 
 ```bash
-python -m src.pipeline.run_kaggle_pipeline
+phishguard train
 ```
 
 ## Stage Graph
@@ -49,17 +49,17 @@ Auxiliary:
 
 ```bash
 # default sampled run
-python -m src.pipeline.run_kaggle_pipeline
+phishguard train
 
 # quick smoke
-python -m src.pipeline.run_kaggle_pipeline --sample-size 5000
+phishguard train --sample-size 5000
 
 # full dataset
-python -m src.pipeline.run_kaggle_pipeline --full
+phishguard train --full
 ```
 
 ## Guardrails
 
 - Do not include raw Kaggle files in git.
 - Do not include model binaries unless explicitly intended for release.
-- Keep training and runtime code separated (`src/pipeline` vs `src/app_v1`).
+- Keep training and runtime code separated (`src/phishguard` vs `src/phishguard.app`).

@@ -1,9 +1,9 @@
 """Official-domain policy helper + dashboard cap (fallback UX)."""
 
-from src.app_v1.analyze_dashboard import _apply_official_brand_apex_cap
-from src.pipeline.features.brand_signals import host_on_official_brand_apex
-from src.pipeline.features.url_features import host_on_official_brand_apex as host_on_official_reexport
-from src.pipeline.layer1_features import extract_layer1_features
+from phishguard.app.dashboard import _apply_official_brand_apex_cap
+from phishguard.features.brand_signals import host_on_official_brand_apex
+from phishguard.features.url_features import host_on_official_brand_apex as host_on_official_reexport
+from phishguard.features.layer1 import extract_layer1_features
 
 
 def test_layer1_google_official_anchor() -> None:

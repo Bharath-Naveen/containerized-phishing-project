@@ -1,6 +1,6 @@
 """Layer-1 feature extraction shape and keys."""
 
-from src.pipeline.layer1_features import extract_layer1_features, layer1_feature_key_set
+from phishguard.features.layer1 import extract_layer1_features, layer1_feature_key_set
 
 
 def test_layer1_keys_stable_without_dns() -> None:

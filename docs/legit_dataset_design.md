@@ -66,7 +66,7 @@
 Run after ingest / split:
 
 ```bash
-python -m src.pipeline.dataset_report
+python -m phishguard.evaluation.dataset_report
 ```
 
 Review **legit share of `login_auth` vs `homepage`** on the training split and **category entropy** vs phishing.

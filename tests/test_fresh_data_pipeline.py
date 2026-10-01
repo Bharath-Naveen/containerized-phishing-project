@@ -6,16 +6,16 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from src.pipeline.fresh_data import collect_tranco, deduplicate_urls, label_sanity_check
+from phishguard.data.fresh_collect import collect_tranco, deduplicate_urls, label_sanity_check
 
 
 def _patch_retrain_deploy_models_dir(tmp_path: Path) -> object:
     deploy = tmp_path / "deploy_models"
     deploy.mkdir(parents=True, exist_ok=True)
-    return patch("src.pipeline.retrain_with_fresh.models_dir", return_value=deploy)
-from src.pipeline.merge_datasets import merge_datasets
-from src.pipeline.retrain_with_fresh import ensure_enrich_compatible, ensure_split_compatible, retrain_with_fresh
-from src.pipeline.split_leak_safe import stratified_group_train_test
+    return patch("phishguard.pipelines.retrain_with_fresh.models_dir", return_value=deploy)
+from phishguard.data.merge import merge_datasets
+from phishguard.pipelines.retrain_with_fresh import ensure_enrich_compatible, ensure_split_compatible, retrain_with_fresh
+from phishguard.data.split import stratified_group_train_test
 
 
 def test_label_sanity_check_keeps_only_0_1() -> None:
@@ -106,7 +106,8 @@ def test_ensure_split_compatible_adds_canonical_url(tmp_path: Path) -> None:
     out = ensure_split_compatible(p)
     df = pd.read_csv(out, dtype=str, low_memory=False)
     assert "canonical_url" in df.columns
-    assert df.loc[0, "canonical_url"] == "https://a.com"
+    # Rebuild: the fallback canonicalizes (it used to copy the raw string, which broke grouping).
+    assert df.loc[0, "canonical_url"] == "https://a.com/"
 
 
 def test_ensure_split_compatible_keeps_existing_canonical_url(tmp_path: Path) -> None:
@@ -123,7 +124,13 @@ def test_ensure_enrich_compatible_adds_canonical_url() -> None:
     df = pd.DataFrame({"url": ["https://a.com"], "status": [0], "label": [1]})
     out = ensure_enrich_compatible(df)
     assert "canonical_url" in out.columns
-    assert out.loc[0, "canonical_url"] == "https://a.com"
+    assert out.loc[0, "canonical_url"] == "https://a.com/"
+
+
+def test_ensure_enrich_compatible_canonicalizes_bare_host() -> None:
+    df = pd.DataFrame({"url": ["summah.info/"], "status": [0], "label": [1]})
+    out = ensure_enrich_compatible(df)
+    assert out.loc[0, "canonical_url"] == "http://summah.info/"
 
 
 def test_retrain_pipeline_end_to_end_mocked(tmp_path: Path) -> None:
@@ -183,7 +190,7 @@ def test_retrain_pipeline_end_to_end_mocked(tmp_path: Path) -> None:
             df.to_csv(out_csv, index=False)
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -193,7 +200,7 @@ def test_retrain_pipeline_end_to_end_mocked(tmp_path: Path) -> None:
 
     with _patch_retrain_deploy_models_dir(tmp_path):
         with patch(
-            "src.pipeline.retrain_with_fresh.build_fresh_dataset",
+            "phishguard.pipelines.retrain_with_fresh.build_fresh_dataset",
             return_value=(
                 fresh_train,
                 fresh_holdout,
@@ -206,8 +213,8 @@ def test_retrain_pipeline_end_to_end_mocked(tmp_path: Path) -> None:
                 },
             ),
         ):
-            with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-                with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+            with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+                with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                     summary = retrain_with_fresh(
                         kaggle_path=kag_path,
                         use_fresh_data=True,
@@ -250,7 +257,7 @@ def test_retrain_kaggle_only_fresh_used_zero(tmp_path: Path) -> None:
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -259,9 +266,9 @@ def test_retrain_kaggle_only_fresh_used_zero(tmp_path: Path) -> None:
         (metrics_dir() / "metrics.json").write_text(json.dumps([{"model": "logistic_regression", "f1": 0.7}]))
 
     with _patch_retrain_deploy_models_dir(tmp_path):
-        with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-            with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+        with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+            with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                     summary = retrain_with_fresh(
                         kaggle_path=kag_path,
                         use_fresh_data=False,
@@ -304,7 +311,7 @@ def test_retrain_sample_rows_marks_debug_mode(tmp_path: Path) -> None:
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -313,9 +320,9 @@ def test_retrain_sample_rows_marks_debug_mode(tmp_path: Path) -> None:
         (metrics_dir() / "metrics.json").write_text(json.dumps([{"model": "logistic_regression", "f1": 0.7}]))
 
     with _patch_retrain_deploy_models_dir(tmp_path):
-        with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-            with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+        with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+            with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                     summary = retrain_with_fresh(
                         kaggle_path=kag_path,
                         use_fresh_data=False,
@@ -357,7 +364,7 @@ def test_use_fresh_data_failed_collectors_sets_effective_false_and_warning(tmp_p
         te = kwargs["test_out"]
         df.head(3).to_csv(tr, index=False)
         df.tail(3).to_csv(te, index=False)
-        from src.pipeline.paths import reports_dir
+        from phishguard.paths import reports_dir
 
         (reports_dir() / "split_leak_safe_stats.json").write_text(
             json.dumps({"registered_domain_overlap_count": 0, "canonical_url_overlap_count": 0})
@@ -365,7 +372,7 @@ def test_use_fresh_data_failed_collectors_sets_effective_false_and_warning(tmp_p
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -375,7 +382,7 @@ def test_use_fresh_data_failed_collectors_sets_effective_false_and_warning(tmp_p
 
     with _patch_retrain_deploy_models_dir(tmp_path):
         with patch(
-            "src.pipeline.retrain_with_fresh.build_fresh_dataset",
+            "phishguard.pipelines.retrain_with_fresh.build_fresh_dataset",
             return_value=(
                 pd.DataFrame(columns=["url", "status", "label", "registered_domain", "source"]),
                 pd.DataFrame(columns=["url", "status", "label", "registered_domain", "source"]),
@@ -388,9 +395,9 @@ def test_use_fresh_data_failed_collectors_sets_effective_false_and_warning(tmp_p
                 },
             ),
         ):
-            with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-                with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                    with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+            with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+                with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                    with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                         summary = retrain_with_fresh(
                             kaggle_path=kag_path,
                             use_fresh_data=True,
@@ -431,7 +438,7 @@ def test_train_test_domain_overlap_uses_split_stats(tmp_path: Path) -> None:
         te = kwargs["test_out"]
         df.head(3).to_csv(tr, index=False)
         df.tail(3).to_csv(te, index=False)
-        from src.pipeline.paths import reports_dir
+        from phishguard.paths import reports_dir
 
         (reports_dir() / "split_leak_safe_stats.json").write_text(
             json.dumps({"registered_domain_overlap_count": 0, "canonical_url_overlap_count": 0})
@@ -439,7 +446,7 @@ def test_train_test_domain_overlap_uses_split_stats(tmp_path: Path) -> None:
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -448,9 +455,9 @@ def test_train_test_domain_overlap_uses_split_stats(tmp_path: Path) -> None:
         (metrics_dir() / "metrics.json").write_text(json.dumps([{"model": "logistic_regression", "f1": 0.7}]))
 
     with _patch_retrain_deploy_models_dir(tmp_path):
-        with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-            with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+        with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+            with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                     summary = retrain_with_fresh(
                         kaggle_path=kag_path,
                         use_fresh_data=False,
@@ -465,7 +472,7 @@ def test_collect_tranco_records_404_failure() -> None:
         text = ""
         headers = {}
 
-    with patch("src.pipeline.fresh_data.requests.get", return_value=_Resp()):
+    with patch("phishguard.data.fresh_collect.requests.get", return_value=_Resp()):
         df, meta = collect_tranco(n=10, return_meta=True)
     assert df.empty
     assert meta["tranco_download_failed"] is True
@@ -515,7 +522,7 @@ def test_sample_mode_fresh_preserve_includes_all_fresh_no_duplicates_and_labels(
         te = kwargs["test_out"]
         df.head(max(1, len(df) // 2)).to_csv(tr, index=False)
         df.tail(max(1, len(df) // 2)).to_csv(te, index=False)
-        from src.pipeline.paths import reports_dir
+        from phishguard.paths import reports_dir
 
         (reports_dir() / "split_leak_safe_stats.json").write_text(
             json.dumps({"registered_domain_overlap_count": 0, "canonical_url_overlap_count": 0})
@@ -523,7 +530,7 @@ def test_sample_mode_fresh_preserve_includes_all_fresh_no_duplicates_and_labels(
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -533,7 +540,7 @@ def test_sample_mode_fresh_preserve_includes_all_fresh_no_duplicates_and_labels(
 
     with _patch_retrain_deploy_models_dir(tmp_path):
         with patch(
-            "src.pipeline.retrain_with_fresh.build_fresh_dataset",
+            "phishguard.pipelines.retrain_with_fresh.build_fresh_dataset",
             return_value=(
                 fresh_train,
                 fresh_holdout,
@@ -546,9 +553,9 @@ def test_sample_mode_fresh_preserve_includes_all_fresh_no_duplicates_and_labels(
                 },
             ),
         ):
-            with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-                with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                    with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+            with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+                with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                    with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                         summary = retrain_with_fresh(
                             kaggle_path=kag_path,
                             use_fresh_data=True,
@@ -601,7 +608,7 @@ def test_no_primary_overwrite_without_flag(tmp_path: Path) -> None:
         te = kwargs["test_out"]
         df.head(4).to_csv(tr, index=False)
         df.tail(4).to_csv(te, index=False)
-        from src.pipeline.paths import reports_dir
+        from phishguard.paths import reports_dir
 
         (reports_dir() / "split_leak_safe_stats.json").write_text(
             json.dumps({"registered_domain_overlap_count": 0, "canonical_url_overlap_count": 0})
@@ -609,7 +616,7 @@ def test_no_primary_overwrite_without_flag(tmp_path: Path) -> None:
         return tr, te
 
     def _fake_train(train_csv, test_csv, **kwargs):  # type: ignore[no-untyped-def]
-        from src.pipeline.paths import metrics_dir, models_dir, reports_dir
+        from phishguard.paths import metrics_dir, models_dir, reports_dir
 
         metrics_dir().mkdir(parents=True, exist_ok=True)
         models_dir().mkdir(parents=True, exist_ok=True)
@@ -617,10 +624,10 @@ def test_no_primary_overwrite_without_flag(tmp_path: Path) -> None:
         (models_dir() / "logistic_regression.joblib").write_bytes(b"x")
         (metrics_dir() / "metrics.json").write_text(json.dumps([{"model": "logistic_regression", "f1": 0.7}]))
 
-    with patch("src.pipeline.retrain_with_fresh.models_dir", return_value=custom_models_dir):
-        with patch("src.pipeline.retrain_with_fresh.enrich", side_effect=_fake_enrich):
-            with patch("src.pipeline.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
-                with patch("src.pipeline.retrain_with_fresh.train", side_effect=_fake_train):
+    with patch("phishguard.pipelines.retrain_with_fresh.models_dir", return_value=custom_models_dir):
+        with patch("phishguard.pipelines.retrain_with_fresh.enrich", side_effect=_fake_enrich):
+            with patch("phishguard.pipelines.retrain_with_fresh.split_leak_safe", side_effect=_fake_split):
+                with patch("phishguard.pipelines.retrain_with_fresh.train", side_effect=_fake_train):
                     retrain_with_fresh(
                         kaggle_path=kag_path,
                         use_fresh_data=False,

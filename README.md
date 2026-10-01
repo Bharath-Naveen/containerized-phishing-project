@@ -1,5 +1,7 @@
 # Containerized Phishing Detection Dashboard
 
+[![CI](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml/badge.svg)](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml)
+
 Layered phishing detection dashboard combining ML triage and deterministic evidence review for explainable, deployment-ready decisions.
 
 ## Project Goal
@@ -49,17 +51,21 @@ The runtime path is deterministic. AI adjudication is removed/disabled.
 ### Local Python run
 
 ```powershell
-$env:PYTHONPATH = "$PWD"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run src/app_v1/frontend.py
+pip install -e .            # installs the `phishguard` command
+phishguard serve            # Streamlit dashboard on http://localhost:8501 (uses the verified model in models/layer1/)
 ```
 
-CLI one-off analysis:
+One command for everything:
 
 ```powershell
-python -m src.app_v1.analyze_dashboard --url "https://example.com"
+phishguard analyze --url "https://example.com"   # score one URL (add --no-reinforcement for ML-only)
+phishguard train                                 # train on a 50K stratified Kaggle sample (--full for all rows)
+phishguard evaluate                              # every verified metric + model card (after phishguard train)
+phishguard evaluate-live                         # full system with live page capture (needs internet; runs in GitHub Actions)
+phishguard deploy                                # ship the latest trained model bundle
 ```
 
 ### Docker run
@@ -85,6 +91,33 @@ Then open [http://localhost:8501](http://localhost:8501).
 - `uncertain`: evidence conflict or insufficient corroboration; manual review recommended.
 - `likely_legitimate`: strong legitimacy evidence with no high-risk phishing blockers.
 
+## Results
+
+Every number here comes from `phishguard evaluate` (seed 42) and is saved with its command, commit, data hash and environment in [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Regenerate everything with `bash metrics/reproduce.sh` (about 25 minutes on 2 CPU cores). Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
+
+Layer-1 URL model, trained on the full Kaggle dataset (794,563 deduplicated URLs) and tested on 147,702 URLs from domains never seen in training (threshold 0.5):
+
+| Model | F1 (95% CI) | ROC-AUC | Precision | Recall | False-positive rate |
+|---|---|---|---|---|---|
+| Majority-class baseline | 0.000 | 0.500 | 0.000 | 0.000 | 0.0% |
+| **XGBoost (selected on validation data)** | 0.801 (0.799 to 0.803) | 0.880 | 0.772 | 0.832 | 21.3% |
+| Random Forest | 0.793 | 0.884 | 0.784 | 0.802 | 19.2% |
+| LightGBM | 0.803 | 0.877 | 0.764 | 0.847 | 22.7% |
+
+- Tests: 372 of 372 pass; 53.5% line coverage of `src/phishguard`.
+- Real-world checks (never in training): the URL model alone flags 40.4% of 136 official brand URLs and 81.0% of 284 PhishStats phishing URLs. Without live capture the adjudication layer turns none of the official URLs into a phishing verdict (all go to `uncertain`).
+
+Full system with live page capture, replaying one frozen snapshot of real pages (captured by GitHub Actions; rules tuned on the validation half only, test half scored once; plan in [docs/rebuild/TUNING_PLAN.md](docs/rebuild/TUNING_PLAN.md)):
+
+| Test half | Labeled likely_phishing | uncertain | likely_legitimate |
+|---|---|---|---|
+| 136 official brand URLs (legitimate) | 4 | 24 | 108 |
+| 99 fresh PhishStats phishing URLs (captured) | 39 | 20 | 40 |
+
+- The system is good at not crying wolf on real sites, and weak at catching fresh phishing: the URL model scores many famous homepages as high as phishing, so rules cannot separate the two without adding false alarms.
+- Full path (Playwright capture plus analysis): p50 6.8 s, p95 15.0 s per URL on a GitHub-hosted runner. URL model alone: p50 15.7 ms.
+- These numbers replace an earlier audit of the original code, which had a leaky split; that record is in `metrics/audit_baseline/`.
+
 ## Known Limitations
 
 - URL-based ML can over-alert on modern JS-heavy sites.
@@ -99,19 +132,29 @@ Then open [http://localhost:8501](http://localhost:8501).
 - Expose port `8501` and secure access (HTTPS + auth/network controls) before sharing publicly.
 - Never store secrets in repo files or compose files.
 
-## Suggested Repo Layout (Deployment-Ready)
+## Repo Layout
 
 ```text
 .
-├── src/                      # Runtime + pipeline code
-├── tests/                    # Regression tests
-├── docs/                     # Design and operational docs
-├── data/
-│   ├── official_domains.json # curated trust-prior registry (kept)
-│   ├── raw/ interim/ processed/ (runtime/training data, gitignored)
-├── models/                   # optional demo artifacts
-├── Dockerfile
-├── docker-compose.yml
+├── src/phishguard/
+│   ├── urls/          # URL parsing + the one canonical/scheme-neutral normalizer
+│   ├── data/          # Kaggle ingest, clean, sample, evaluation sets, enrich, domain-grouped split
+│   ├── features/      # Layer-1 URL/host features
+│   ├── models/        # training (validated selection, model bundle), deploy
+│   ├── pipelines/     # end-to-end training pipelines (phishguard train)
+│   ├── evaluation/    # URL suites, false-positive / phishing audits, reports
+│   ├── app/           # dashboard, EAL, capture, signals, Streamlit UI
+│   ├── guards.py      # checks that stop leaky splits and train/serve skew
+│   ├── config.py      # seed and defaults
+│   └── cli.py         # the phishguard command
+├── tests/             # unit, regression and golden-output tests
+├── metrics/           # verified, reproducible metrics (see Results)
+├── docs/rebuild/      # how it works + rebuild log
+├── models/layer1/     # the verified model the app ships (MANIFEST.json has hashes and provenance)
+├── data/              # evaluation sets + registries (tracked); raw/processed data (gitignored)
+├── .github/workflows/ # CI (tests + Docker build) and the live-capture evaluation
+├── archive/legacy/    # retired AI adjudication path and old scripts
+├── Dockerfile, docker-compose.yml, pyproject.toml
 └── README.md
 ```
 
@@ -123,11 +166,12 @@ Generated runtime artifacts should remain untracked:
 - `data/processed/`
 - temporary CSV/JSONL exports
 
-## Useful Commands
+## Tests
 
 ```bash
-# targeted regression set used for deployment checks
-pytest tests/test_evidence_adjudication_layer.py tests/test_hosting_domain_trust_layer.py tests/test_ml_model_agreement.py tests/test_behavior_signals.py -q
+pytest            # full suite, including golden-output tests that pin the dashboard's behavior
 ```
 
-# This project is under review and will be rebuild after planning
+## Rebuild in progress
+
+This project is being rebuilt for verified, reproducible results. What changed and why: [docs/rebuild/REBUILD_LOG.md](docs/rebuild/REBUILD_LOG.md). How the system works: [docs/rebuild/HOW_IT_WORKS.md](docs/rebuild/HOW_IT_WORKS.md).

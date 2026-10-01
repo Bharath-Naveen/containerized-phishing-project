@@ -1,0 +1,289 @@
+{
+  "command": "python metrics/scripts/01_pipeline.py --sample-size 50000",
+  "pipeline_entrypoint": "src.pipeline.run_kaggle_pipeline.run_kaggle_pipeline (repo code, unmodified)",
+  "end_to_end_runtime_seconds": 87.9,
+  "raw_dataset": {
+    "path": "data/raw/kaggle/phishing_and_legitimate_urls.csv",
+    "sha256": "330901bb4fbb63ffc25d371cf0bed919c1ca031ea1c809bfc9a154a2d79e4a29",
+    "rows": 822010,
+    "columns": [
+      "url",
+      "status"
+    ],
+    "n_columns": 2,
+    "status_counts_raw_kaggle_convention": {
+      "1": 427028,
+      "0": 394982
+    },
+    "note": "Kaggle convention: status 1 = legitimate, 0 = phishing. Internal label: 1 = phishing.",
+    "date_range": "not available (dataset has only url,status columns; no timestamps)"
+  },
+  "dedup": {
+    "canonical_url_rows_before": 822010,
+    "canonical_url_rows_after": 796446
+  },
+  "sample_manifest": {
+    "full_deduplicated_rows": 796446,
+    "random_seed": 42,
+    "layer1_use_dns": false,
+    "sample_size_requested": 50000,
+    "simple_legit_augment": {
+      "rows_added": 896,
+      "jsonl_rows_considered": 898,
+      "output_rows": 50896
+    },
+    "run_mode": "STRATIFIED_SAMPLE",
+    "stratified_sample": {
+      "mode": "stratified",
+      "input_rows": 796446,
+      "sample_rows": 50000,
+      "random_state": 42,
+      "label_counts_input": {
+        "0": 426991,
+        "1": 369455
+      },
+      "label_counts_sample": {
+        "0": 26806,
+        "1": 23194
+      }
+    }
+  },
+  "split": {
+    "split_method": "StratifiedGroupKFold_first_fold",
+    "n_splits_param": 5,
+    "approx_test_fraction": 0.2,
+    "n_train": 41403,
+    "n_test": 9493,
+    "train_groups": 24931,
+    "test_groups": 6251,
+    "canonical_url_overlap_count": 0,
+    "registered_domain_overlap_count": 0,
+    "train_label_counts": {
+      "0": 22698,
+      "1": 18705
+    },
+    "test_label_counts": {
+      "0": 5004,
+      "1": 4489
+    }
+  },
+  "leakage_audit": {
+    "train_rows": 41403,
+    "test_rows": 9493,
+    "canonical_url_overlap": [],
+    "canonical_url_overlap_count": 0,
+    "group_key_overlap_count": 0,
+    "metadata_columns_excluded_from_model_features": [
+      "_leak_group",
+      "_split",
+      "action_category",
+      "automation_blocked",
+      "behavior_skipped",
+      "canonical_url",
+      "challenge_detected",
+      "dns_error",
+      "dns_missing",
+      "enrich_fatal_error",
+      "fetch_error",
+      "fetch_error_flag",
+      "fetch_features_missing",
+      "final_url",
+      "group_key_fallback_used",
+      "html_features_missing",
+      "http_status",
+      "invalid_url",
+      "kaggle_raw_status",
+      "label",
+      "navigation_timeout",
+      "page_fetch_success",
+      "page_load_success",
+      "parse_error",
+      "source_brand_hint",
+      "source_dataset",
+      "source_file",
+      "url"
+    ],
+    "notes": [
+      "Model training must exclude metadata columns listed above.",
+      "Group overlap should be 0 when using split_leak_safe.StratifiedGroupKFold."
+    ],
+    "leakage_risk": "LOW"
+  },
+  "n_features_used": 56,
+  "feature_columns_used": [
+    "url_length",
+    "hostname_length",
+    "path_length",
+    "query_length",
+    "num_dots",
+    "num_hyphens",
+    "num_digits",
+    "num_special_chars",
+    "subdomain_count",
+    "has_ip_address",
+    "has_at_symbol",
+    "hostname_entropy",
+    "path_segment_count",
+    "path_shallow_le1",
+    "path_shallow_le2",
+    "suspicious_redirect_query_flag",
+    "suspicious_keyword_count",
+    "kw_login",
+    "kw_verify",
+    "kw_secure",
+    "kw_update",
+    "kw_account",
+    "kw_payment",
+    "kw_confirm",
+    "kw_password",
+    "path_query_authish_keyword_hits",
+    "no_authish_path_query_tokens",
+    "port_present",
+    "punycode_flag",
+    "free_hosting_flag",
+    "cloud_hosting_flag",
+    "private_host_flag",
+    "official_registrable_anchor",
+    "official_domain_family",
+    "brand_hostname_exact_label_match",
+    "brand_hyphenated_deception_label",
+    "brand_typosquat_embedded_in_label",
+    "path_brand_token_present",
+    "path_brand_without_official_host",
+    "brand_on_free_hosting",
+    "brand_on_cloud_placeholder",
+    "host_brand_substring_not_official",
+    "num_brand_tokens_in_host",
+    "num_brand_tokens_in_path",
+    "domain_hash_bucket",
+    "layer1_brand_trust_score",
+    "official_anchor_with_https",
+    "https_without_official_anchor",
+    "legit_auth_surface_on_official_anchor",
+    "legit_admin_like_path_on_official_anchor",
+    "legit_checkout_like_path_on_official_anchor",
+    "simple_public_web_shape",
+    "simple_official_homepage_shape",
+    "dns_features_skipped",
+    "url_features_missing",
+    "hosting_features_missing"
+  ],
+  "repo_train_py_metrics_threshold_0_5": [
+    {
+      "model": "logistic_regression",
+      "accuracy": 0.7607710944906774,
+      "precision": 0.7507914970601538,
+      "recall": 0.7395856538204499,
+      "f1": 0.7451464482100775,
+      "roc_auc": 0.8507990221767785,
+      "confusion_matrix": [
+        [
+          3902,
+          1102
+        ],
+        [
+          1169,
+          3320
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.025775668472519213,
+      "audit_official_https_mean_phish_proba": 0.16104444729629241
+    },
+    {
+      "model": "random_forest",
+      "accuracy": 0.8693774360054777,
+      "precision": 0.9379886761930439,
+      "recall": 0.7750055691690799,
+      "f1": 0.8487435959990242,
+      "roc_auc": 0.924460988126407,
+      "confusion_matrix": [
+        [
+          4774,
+          230
+        ],
+        [
+          1010,
+          3479
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.10416948394101669,
+      "audit_official_https_mean_phish_proba": 0.5081647488178592
+    },
+    {
+      "model": "xgboost",
+      "accuracy": 0.8742231117665649,
+      "precision": 0.9275888917726447,
+      "recall": 0.7961684116729784,
+      "f1": 0.8568688563893551,
+      "roc_auc": 0.938935841747631,
+      "confusion_matrix": [
+        [
+          4725,
+          279
+        ],
+        [
+          915,
+          3574
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.032793902495613377,
+      "audit_official_https_mean_phish_proba": 0.6623900374397635
+    },
+    {
+      "model": "lightgbm",
+      "accuracy": 0.8745391340988097,
+      "precision": 0.9099950273495774,
+      "recall": 0.8153263533080864,
+      "f1": 0.8600634473034896,
+      "roc_auc": 0.9439602250033344,
+      "confusion_matrix": [
+        [
+          4642,
+          362
+        ],
+        [
+          829,
+          3660
+        ]
+      ],
+      "test_mean_phish_proba_official_anchor_rows": 0.023335068971334798,
+      "audit_official_https_mean_phish_proba": 0.691431568657611
+    }
+  ],
+  "calibration": {
+    "calibrator_type": "isotonic",
+    "brier_test_raw_layer1_primary": 0.1566876391262524,
+    "brier_test_calibrated": 0.15588323738468143
+  },
+  "_provenance": {
+    "generated_utc": "2026-09-29T20:16:01+00:00",
+    "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+    "code_trees": {
+      "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+      "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+      "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+      "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+    },
+    "seed": 42,
+    "environment": {
+      "python": "3.11.15",
+      "os": "Linux 6.18.44-fc-v37",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu_count": 2,
+      "ram_gb": 7.8,
+      "gpu": "none (CPU only)",
+      "packages": {
+        "numpy": "1.26.4",
+        "pandas": "2.3.3",
+        "scikit-learn": "1.5.1",
+        "xgboost": "2.1.4",
+        "lightgbm": "4.7.0",
+        "joblib": "1.4.2",
+        "tldextract": "5.3.2",
+        "pytest": "8.4.2",
+        "pytest-cov": "7.1.0",
+        "playwright": "1.49.0"
+      }
+    }
+  }
+}

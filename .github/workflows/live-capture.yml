@@ -1,0 +1,79 @@
+name: Live capture evaluation
+
+# Measures the full system with real Playwright page capture: needs internet, so it runs here.
+# Not on a timer: capture submits a dummy login (test.user@example.com) on pages with login forms
+# unless login_interaction is false, so it should not hammer real sites repeatedly. It runs when you
+# start it by hand (Actions tab), and once automatically when this workflow or the live evaluator
+# changes on the rebuild branch (that run commits its results back so they can be reviewed).
+
+on:
+  push:
+    branches: [rebuild/verified-metrics]
+    paths:
+      - .github/workflows/live-capture.yml
+      - src/phishguard/evaluation/live.py
+  workflow_dispatch:
+    inputs:
+      phishstats:
+        description: "Newest PhishStats phishing URLs to test"
+        default: "60"
+      tranco:
+        description: "Popular legitimate homepages to test"
+        default: "60"
+      login_interaction:
+        description: "Let capture submit a dummy login on login forms (original app behavior)"
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+      commit_results:
+        description: "Commit metrics/results/live_capture.json and the re-rendered report back to this branch"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install app and Chromium
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+          python -m playwright install --with-deps chromium
+      - name: Evaluate with live capture
+        env:
+          PYTHONHASHSEED: "42"
+          PHISH_ENABLE_LOGIN_INTERACTION: ${{ inputs.login_interaction || 'true' }}
+          PHISH_OUTPUT_DIR: ${{ runner.temp }}/captures
+          PHISH_NAV_TIMEOUT_MS: "20000"
+        run: phishguard evaluate-live --phishstats "${{ inputs.phishstats || '60' }}" --tranco "${{ inputs.tranco || '60' }}"
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f metrics/VERIFIED_METRICS.md ]; then
+            sed -n '/## Full system with live page capture/,$p' metrics/VERIFIED_METRICS.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload results (no screenshots or page HTML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-capture-results
+          path: |
+            metrics/results/live_capture.json
+            metrics/VERIFIED_METRICS.md
+      - name: Commit results
+        if: ${{ inputs.commit_results || github.event_name == 'push' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add metrics/results/live_capture.json metrics/VERIFIED_METRICS.md docs/MODEL_CARD.md
+          git commit -m "Live capture evaluation results (GitHub Actions run ${{ github.run_id }})" || echo "nothing to commit"
+          git push

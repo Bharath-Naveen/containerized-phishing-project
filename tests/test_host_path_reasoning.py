@@ -1,4 +1,4 @@
-from src.app_v1.host_path_reasoning import (
+from phishguard.app.host_path_reasoning import (
     assess_host_path_reasoning,
     blend_ml_phish_for_host_path_reasoning,
 )

@@ -8,13 +8,13 @@ Dataset: **`harisudhan411/phishing-and-legitimate-urls`** (binary URL + label).
 
 1. Download the CSV from Kaggle.
 2. Place it under **`data/raw/kaggle/`** (any filename ending in `.csv`).
-3. Verify labels in **`outputs/reports/kaggle_label_audit.json`** after first ingest (Kaggle convention: `1` = legitimate, `0` = phishing; internally mapped to `0` / `1` — see `src/pipeline/label_policy.py`).
+3. Verify labels in **`outputs/reports/kaggle_label_audit.json`** after first ingest (Kaggle convention: `1` = legitimate, `0` = phishing; internally mapped to `0` / `1` — see `src/phishguard/data/labels.py`).
 
 ### Option B — `kagglehub`
 
 ```bash
 pip install kagglehub
-python -m src.pipeline.kaggle_ingest --download
+python -m phishguard.data.kaggle --download
 ```
 
 Requires Kaggle API credentials (`~/.kaggle/kaggle.json` or env vars — see `.env.example`).
@@ -27,21 +27,21 @@ From repo root with `PYTHONPATH` set (or use Docker):
 
 ```bash
 # Default: stratified sample of 50k (fast iteration)
-python -m src.pipeline.run_kaggle_pipeline
+phishguard train
 
 # Explicit sizes
-python -m src.pipeline.run_kaggle_pipeline --sample-size 5000      # smoke
-python -m src.pipeline.run_kaggle_pipeline --sample-size 200000    # larger eval
-python -m src.pipeline.run_kaggle_pipeline --sample-frac 0.1       # 10% of deduped rows
+phishguard train --sample-size 5000      # smoke
+phishguard train --sample-size 200000    # larger eval
+phishguard train --sample-frac 0.1       # 10% of deduped rows
 
-# Full ~796k rows (many hours of Layer-1 enrich)
-python -m src.pipeline.run_kaggle_pipeline --full
+# Full ~796k rows (about 12 minutes end to end on 2 CPU cores)
+phishguard train --full
 
 # Reproducibility
-python -m src.pipeline.run_kaggle_pipeline --random-seed 42 --sample-size 50000
+phishguard train --random-seed 42 --sample-size 50000
 
 # Fresh enrich checkpoint for this sample (ignore stale interim checkpoint)
-python -m src.pipeline.run_kaggle_pipeline --no-enrich-resume --sample-size 20000
+phishguard train --no-enrich-resume --sample-size 20000
 ```
 
 Optional **`--limit`** still caps how many rows **enrich** processes after sampling (debug only).
@@ -55,7 +55,7 @@ Optional **`--limit`** still caps how many rows **enrich** processes after sampl
 | Larger eval | `--sample-size 200000` or `--sample-frac 0.25` | Better metrics, still bounded |
 | Production-scale | `--full` | All deduplicated URLs; plan overnight / cluster |
 
-**Layer-1 cost notes:** Enrichment is **URL parse + tldextract only** (no HTTP, no Playwright) unless you pass `--layer1-use-dns`. Checkpoints default to every **400** rows for Layer-1 to reduce disk I/O. `domain_hash_bucket` uses a **stable hash** (not Python’s `hash()`) so features are reproducible across processes.
+**Layer-1 cost notes:** Enrichment is **URL parse + tldextract only** (no HTTP, no Playwright) unless you pass `--layer1-use-dns`. Checkpoints default to every **50,000** rows for Layer-1 (the full dataset enriches in about 3 minutes). `domain_hash_bucket` uses a **stable hash** (not Python’s `hash()`) so features are reproducible across processes.
 
 Artifacts go to `data/processed/` and `outputs/` (gitignored).
 

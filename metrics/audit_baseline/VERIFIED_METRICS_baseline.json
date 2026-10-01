@@ -1,0 +1,1080 @@
+{
+  "generated_utc": "2026-09-29T20:20:23+00:00",
+  "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+  "seed": 42,
+  "environment": {
+    "python": "3.11.15",
+    "os": "Linux 6.18.44-fc-v37",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu_count": 2,
+    "ram_gb": 7.8,
+    "gpu": "none (CPU only)",
+    "packages": {
+      "numpy": "1.26.4",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.5.1",
+      "xgboost": "2.1.4",
+      "lightgbm": "4.7.0",
+      "joblib": "1.4.2",
+      "tldextract": "5.3.2",
+      "pytest": "8.4.2",
+      "pytest-cov": "7.1.0",
+      "playwright": "1.49.0"
+    }
+  },
+  "reproduce": "bash metrics/reproduce.sh",
+  "data": {
+    "kaggle_csv": "data/raw/kaggle/phishing_and_legitimate_urls.csv (Kaggle harisudhan411/phishing-and-legitimate-urls, not committed)",
+    "kaggle_csv_sha256": "330901bb4fbb63ffc25d371cf0bed919c1ca031ea1c809bfc9a154a2d79e4a29",
+    "synthetic_data_used": false
+  },
+  "metrics": [
+    {
+      "section": "Tests",
+      "metric": "pytest collected / passed / failed / skipped",
+      "value": "253 / 253 / 0 / 0",
+      "context": "pass rate 100.0%; runtime 17.8 s",
+      "command": "python metrics/scripts/00_tests.py",
+      "status": "VERIFIED",
+      "source_result_file": "00_tests.json"
+    },
+    {
+      "section": "Tests",
+      "metric": "Line coverage of src/ (pytest-cov)",
+      "value": "52.1%",
+      "context": "4500 of 8643 statements",
+      "command": "python metrics/scripts/00_tests.py",
+      "status": "VERIFIED",
+      "source_result_file": "00_tests.json"
+    },
+    {
+      "section": "Data",
+      "metric": "Raw Kaggle rows x columns",
+      "value": "822,010 x 2",
+      "context": "legit (status 1) 427,028, phishing (status 0) 394,982; no date column",
+      "command": "python metrics/scripts/01_pipeline.py",
+      "status": "VERIFIED",
+      "source_result_file": "01_pipeline.json"
+    },
+    {
+      "section": "Data",
+      "metric": "Rows after URL canonical dedupe",
+      "value": "796,446",
+      "context": "from 822,010",
+      "command": "python metrics/scripts/01_pipeline.py",
+      "status": "VERIFIED",
+      "source_result_file": "01_pipeline.json"
+    },
+    {
+      "section": "Data",
+      "metric": "Documented default sample and grouped split",
+      "value": "50,896 rows: train 41,403 / test 9,493",
+      "context": "50,000 stratified (seed 42) + 896 curated legit URLs; StratifiedGroupKFold by registered domain; train/test domain overlap 0, URL overlap 0",
+      "command": "python metrics/scripts/01_pipeline.py",
+      "status": "VERIFIED",
+      "source_result_file": "01_pipeline.json"
+    },
+    {
+      "section": "Data",
+      "metric": "Features used by the models",
+      "value": "56",
+      "context": "59 extracted; has_https dropped on purpose, tld and public_suffix dropped as high-cardinality",
+      "command": "python metrics/scripts/01_pipeline.py",
+      "status": "VERIFIED",
+      "source_result_file": "01_pipeline.json"
+    },
+    {
+      "section": "Runtime",
+      "metric": "Layer-1 pipeline end to end (ingest, dedupe, sample, enrich, split, train 4 models)",
+      "value": "87.9 s",
+      "context": "50K sample, CPU only (see environment)",
+      "command": "python metrics/scripts/01_pipeline.py",
+      "status": "VERIFIED",
+      "source_result_file": "01_pipeline.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Held-out: dummy_most_frequent",
+      "value": "P 0.000, R 0.000, F1 0.000, ROC-AUC 0.500, PR-AUC 0.473, FPR 0.0%",
+      "context": "held-out test 9,493 rows (4,489 phishing), unseen domains, threshold 0.5; confusion [[tn,fp],[fn,tp]] = [[5004, 0], [4489, 0]]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Held-out: logistic_regression",
+      "value": "P 0.751, R 0.740, F1 0.745, ROC-AUC 0.851, PR-AUC 0.853, FPR 22.0%",
+      "context": "held-out test 9,493 rows (4,489 phishing), unseen domains, threshold 0.5; F1 95% CI 0.734 to 0.756; ROC-AUC 95% CI 0.843 to 0.859; confusion [[tn,fp],[fn,tp]] = [[3902, 1102], [1169, 3320]]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Held-out: random_forest",
+      "value": "P 0.938, R 0.775, F1 0.849, ROC-AUC 0.924, PR-AUC 0.937, FPR 4.6%",
+      "context": "held-out test 9,493 rows (4,489 phishing), unseen domains, threshold 0.5; F1 95% CI 0.840 to 0.857; ROC-AUC 95% CI 0.919 to 0.930; confusion [[tn,fp],[fn,tp]] = [[4774, 230], [1010, 3479]]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Held-out: xgboost",
+      "value": "P 0.928, R 0.796, F1 0.857, ROC-AUC 0.939, PR-AUC 0.947, FPR 5.6%",
+      "context": "held-out test 9,493 rows (4,489 phishing), unseen domains, threshold 0.5; F1 95% CI 0.849 to 0.865; ROC-AUC 95% CI 0.934 to 0.944; confusion [[tn,fp],[fn,tp]] = [[4725, 279], [915, 3574]]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Held-out: lightgbm",
+      "value": "P 0.910, R 0.815, F1 0.860, ROC-AUC 0.944, PR-AUC 0.951, FPR 7.2%",
+      "context": "held-out test 9,493 rows (4,489 phishing), unseen domains, threshold 0.5; F1 95% CI 0.852 to 0.868; ROC-AUC 95% CI 0.940 to 0.948; confusion [[tn,fp],[fn,tp]] = [[4642, 362], [829, 3660]]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "5-fold grouped CV: dummy_most_frequent",
+      "value": "F1 0.000 \u00b1 0.000, ROC-AUC 0.500 \u00b1 0.000, PR-AUC 0.455 \u00b1 0.036",
+      "context": "StratifiedGroupKFold(5) by registered domain on all 50,896 rows; mean \u00b1 std across folds; group overlap per fold [0, 0, 0, 0, 0]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "5-fold grouped CV: logistic_regression",
+      "value": "F1 0.742 \u00b1 0.012, ROC-AUC 0.843 \u00b1 0.024, PR-AUC 0.824 \u00b1 0.041",
+      "context": "StratifiedGroupKFold(5) by registered domain on all 50,896 rows; mean \u00b1 std across folds; group overlap per fold [0, 0, 0, 0, 0]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "5-fold grouped CV: random_forest",
+      "value": "F1 0.849 \u00b1 0.003, ROC-AUC 0.931 \u00b1 0.007, PR-AUC 0.938 \u00b1 0.007",
+      "context": "StratifiedGroupKFold(5) by registered domain on all 50,896 rows; mean \u00b1 std across folds; group overlap per fold [0, 0, 0, 0, 0]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "5-fold grouped CV: xgboost",
+      "value": "F1 0.861 \u00b1 0.002, ROC-AUC 0.941 \u00b1 0.002, PR-AUC 0.945 \u00b1 0.005",
+      "context": "StratifiedGroupKFold(5) by registered domain on all 50,896 rows; mean \u00b1 std across folds; group overlap per fold [0, 0, 0, 0, 0]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "5-fold grouped CV: lightgbm",
+      "value": "F1 0.866 \u00b1 0.003, ROC-AUC 0.946 \u00b1 0.004, PR-AUC 0.949 \u00b1 0.005",
+      "context": "StratifiedGroupKFold(5) by registered domain on all 50,896 rows; mean \u00b1 std across folds; group overlap per fold [0, 0, 0, 0, 0]",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Composite-rule winner",
+      "value": "logistic_regression",
+      "context": "rule: argmax(F1 - mean raw P(phish) on 8 official HTTPS URLs) (src/pipeline/train.py); best F1 = lightgbm, best ROC-AUC = lightgbm",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Layer-1 models (50K default run)",
+      "metric": "Winner at the app threshold (calibrated P >= 0.5): logistic_regression",
+      "value": "P 0.800, R 0.658, F1 0.722, FPR 14.7%",
+      "context": "3-way split from the proxy formula in benchmark_url_suites.py (0.65 x calibrated, thresholds 0.56/0.38), not the full dashboard: {'phishing_rows': {'likely_phishing': 1717, 'uncertain': 959, 'likely_legitimate': 1813}, 'legit_rows': {'likely_phishing': 82, 'uncertain': 442, 'likely_legitimate': 4480}}",
+      "command": "python metrics/scripts/02_evaluate_layer1.py",
+      "status": "VERIFIED",
+      "source_result_file": "02_layer1_eval.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Scheme-artifact check: logistic_regression",
+      "value": "F1 0.745 -> 0.747; ROC-AUC 0.851 -> 0.838",
+      "context": "same rows and split, features recomputed with every URL rewritten to https://",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Scheme-artifact check: random_forest",
+      "value": "F1 0.849 -> 0.820; ROC-AUC 0.924 -> 0.911",
+      "context": "same rows and split, features recomputed with every URL rewritten to https://",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Scheme-artifact check: xgboost",
+      "value": "F1 0.857 -> 0.827; ROC-AUC 0.939 -> 0.926",
+      "context": "same rows and split, features recomputed with every URL rewritten to https://",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Scheme-artifact check: lightgbm",
+      "value": "F1 0.860 -> 0.837; ROC-AUC 0.944 -> 0.930",
+      "context": "same rows and split, features recomputed with every URL rewritten to https://",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Evaluation-list domains found in training rows",
+      "value": "1,414 train rows",
+      "context": "by source {'kaggle_harisudhan411_phishing_and_legitimate_urls': 1355, 'curated_simple_legit': 59}; 18 domains from url_suites, hard_legit, composite audit URLs",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Ablations",
+      "metric": "Composite winner: as-is / scheme-neutral / decontaminated",
+      "value": "logistic_regression / logistic_regression / logistic_regression",
+      "context": "best F1 in each: lightgbm / lightgbm / lightgbm",
+      "command": "python metrics/scripts/03_ablations.py",
+      "status": "VERIFIED",
+      "source_result_file": "03_ablations.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "hard_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=15)",
+      "context": "verdicts {'uncertain': 15}; Layer-1 flag rate 13.3%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "kaggle_heldout_sample:legit",
+      "value": "FP 58.0%; not-flagged 42%; strict likely_legitimate 0% (n=200)",
+      "context": "verdicts {'likely_phishing': 116, 'uncertain': 84}; Layer-1 flag rate 67.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "kaggle_heldout_sample:phishing",
+      "value": "70% likely_phishing (n=200)",
+      "context": "verdicts {'likely_phishing': 141, 'uncertain': 59}; Layer-1 flag rate 98.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "official_brand_2026_04_26",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=298)",
+      "context": "verdicts {'uncertain': 298}; Layer-1 flag rate 29.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "simple_legit",
+      "value": "FP 0.6%; not-flagged 99%; strict likely_legitimate 0% (n=884)",
+      "context": "verdicts {'uncertain': 879, 'likely_phishing': 5}; Layer-1 flag rate 93.2%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "suite:hard_phishing",
+      "value": "75% likely_phishing (n=4)",
+      "context": "verdicts {'likely_phishing': 3, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "suite:obvious_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 66.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "suite:obvious_phish",
+      "value": "50% likely_phishing (n=2)",
+      "context": "verdicts {'likely_phishing': 1, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "suite:tricky_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 16.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (deployed)",
+      "metric": "Legitimacy rescue ON vs OFF",
+      "value": "legit FPs 116 (on) vs 116 (off); verdicts changed 0 of 731",
+      "context": "PHISH_LEGITIMACY_RESCUE_ENABLED toggled; no live capture, so capture-dependent rescue conditions cannot fire",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Layer-1 only, per URL (deployed)",
+      "value": "p50 101.7 ms, p95 129.8 ms",
+      "context": "n=400 held-out URLs, warm process, CPU only",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Dashboard ML-only path incl. EAL, per URL (deployed)",
+      "value": "p50 228.1 ms, p95 280.6 ms",
+      "context": "n=400, reinforcement=False, includes 4-model agreement",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "hard_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=15)",
+      "context": "verdicts {'uncertain': 15}; Layer-1 flag rate 6.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "kaggle_heldout_sample:legit",
+      "value": "FP 1.0%; not-flagged 99%; strict likely_legitimate 0% (n=200)",
+      "context": "verdicts {'uncertain': 198, 'likely_phishing': 2}; Layer-1 flag rate 14.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "kaggle_heldout_sample:phishing",
+      "value": "18% likely_phishing (n=200)",
+      "context": "verdicts {'uncertain': 163, 'likely_phishing': 37}; Layer-1 flag rate 66.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "official_brand_2026_04_26",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=298)",
+      "context": "verdicts {'uncertain': 298}; Layer-1 flag rate 31.2%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "simple_legit",
+      "value": "FP 0.6%; not-flagged 99%; strict likely_legitimate 0% (n=884)",
+      "context": "verdicts {'uncertain': 879, 'likely_phishing': 5}; Layer-1 flag rate 94.1%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "suite:hard_phishing",
+      "value": "75% likely_phishing (n=4)",
+      "context": "verdicts {'likely_phishing': 3, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "suite:obvious_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 66.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "suite:obvious_phish",
+      "value": "50% likely_phishing (n=2)",
+      "context": "verdicts {'likely_phishing': 1, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "suite:tricky_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 0.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (asis_50k)",
+      "metric": "Legitimacy rescue ON vs OFF",
+      "value": "legit FPs 2 (on) vs 2 (off); verdicts changed 0 of 731",
+      "context": "PHISH_LEGITIMACY_RESCUE_ENABLED toggled; no live capture, so capture-dependent rescue conditions cannot fire",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Layer-1 only, per URL (asis_50k)",
+      "value": "p50 8.8 ms, p95 12.7 ms",
+      "context": "n=400 held-out URLs, warm process, CPU only",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Dashboard ML-only path incl. EAL, per URL (asis_50k)",
+      "value": "p50 120.0 ms, p95 150.0 ms",
+      "context": "n=400, reinforcement=False, includes 4-model agreement",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "hard_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=15)",
+      "context": "verdicts {'uncertain': 15}; Layer-1 flag rate 26.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "kaggle_heldout_sample:legit",
+      "value": "FP 1.0%; not-flagged 99%; strict likely_legitimate 0% (n=200)",
+      "context": "verdicts {'uncertain': 198, 'likely_phishing': 2}; Layer-1 flag rate 14.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "kaggle_heldout_sample:phishing",
+      "value": "18% likely_phishing (n=200)",
+      "context": "verdicts {'uncertain': 163, 'likely_phishing': 37}; Layer-1 flag rate 67.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "official_brand_2026_04_26",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=298)",
+      "context": "verdicts {'uncertain': 298}; Layer-1 flag rate 34.9%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "simple_legit",
+      "value": "FP 0.6%; not-flagged 99%; strict likely_legitimate 0% (n=884)",
+      "context": "verdicts {'uncertain': 879, 'likely_phishing': 5}; Layer-1 flag rate 96.5%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "suite:hard_phishing",
+      "value": "75% likely_phishing (n=4)",
+      "context": "verdicts {'likely_phishing': 3, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "suite:obvious_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 66.7%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "suite:obvious_phish",
+      "value": "50% likely_phishing (n=2)",
+      "context": "verdicts {'likely_phishing': 1, 'uncertain': 1}; Layer-1 flag rate 100.0%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "suite:tricky_legit",
+      "value": "FP 0.0%; not-flagged 100%; strict likely_legitimate 0% (n=6)",
+      "context": "verdicts {'uncertain': 6}; Layer-1 flag rate 33.3%",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Dashboard verdicts, ML-only path (decontaminated)",
+      "metric": "Legitimacy rescue ON vs OFF",
+      "value": "legit FPs 2 (on) vs 2 (off); verdicts changed 0 of 731",
+      "context": "PHISH_LEGITIMACY_RESCUE_ENABLED toggled; no live capture, so capture-dependent rescue conditions cannot fire",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Layer-1 only, per URL (decontaminated)",
+      "value": "p50 8.7 ms, p95 12.5 ms",
+      "context": "n=400 held-out URLs, warm process, CPU only",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Dashboard ML-only path incl. EAL, per URL (decontaminated)",
+      "value": "p50 116.7 ms, p95 148.1 ms",
+      "context": "n=400, reinforcement=False, includes 4-model agreement",
+      "command": "python metrics/scripts/04_suites_and_fp.py",
+      "status": "VERIFIED",
+      "source_result_file": "04_suites_and_fp.json"
+    },
+    {
+      "section": "Latency",
+      "metric": "Full path with Playwright live capture",
+      "value": "NOT RUN",
+      "context": "verification sandbox has no general internet egress (only package registries); needs a machine with internet",
+      "command": "python -m src.app_v1.analyze_dashboard --url <url>",
+      "status": "NOT RUN",
+      "source_result_file": null
+    },
+    {
+      "section": "Ablations",
+      "metric": "Legitimacy rescue FP delta with live capture",
+      "value": "NOT RUN",
+      "context": "rescue conditions depend on redirect chain, form targets and DOM risk from Playwright capture; no internet egress here",
+      "command": "PHISH_LEGITIMACY_RESCUE_ENABLED=false python -m src.pipeline.fp_audit --reinforcement",
+      "status": "NOT RUN",
+      "source_result_file": null
+    },
+    {
+      "section": "Ablations",
+      "metric": "EAL edge-case validation (15 live URLs in outputs/reports/eal_edge_case_validation.md)",
+      "value": "NOT RUN",
+      "context": "needs live Playwright capture of real sites; no internet egress in the verification sandbox",
+      "command": "see outputs/reports/eal_edge_case_validation.md",
+      "status": "NOT RUN",
+      "source_result_file": null
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Rows and grouped split",
+      "value": "train 657,226 / test 140,057",
+      "context": "all 796,446 deduplicated Kaggle rows + 837 curated legit; 259,504 / 64,902 domain groups; overlap 0",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Runtime",
+      "metric": "Layer-1 pipeline end to end, full data",
+      "value": "507.7 s",
+      "context": "run_kaggle_pipeline(full_dataset=True) with checkpoint_every=10**9 (default checkpointing is what makes --full take hours)",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Held-out: dummy_most_frequent",
+      "value": "P 0.000, R 0.000, F1 0.000, ROC-AUC 0.500, PR-AUC 0.505, FPR 0.0%",
+      "context": "test 140,057 rows, unseen domains, threshold 0.5",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Held-out: logistic_regression",
+      "value": "P 0.772, R 0.776, F1 0.774, ROC-AUC 0.862, PR-AUC 0.881, FPR 23.4%",
+      "context": "test 140,057 rows, unseen domains, threshold 0.5; F1 95% CI 0.772 to 0.776; ROC-AUC 95% CI 0.860 to 0.864",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Held-out: random_forest",
+      "value": "P 0.936, R 0.803, F1 0.864, ROC-AUC 0.940, PR-AUC 0.953, FPR 5.6%",
+      "context": "test 140,057 rows, unseen domains, threshold 0.5; F1 95% CI 0.862 to 0.866; ROC-AUC 95% CI 0.939 to 0.941",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Held-out: xgboost",
+      "value": "P 0.939, R 0.822, F1 0.876, ROC-AUC 0.950, PR-AUC 0.960, FPR 5.5%",
+      "context": "test 140,057 rows, unseen domains, threshold 0.5; F1 95% CI 0.875 to 0.878; ROC-AUC 95% CI 0.949 to 0.951",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Held-out: lightgbm",
+      "value": "P 0.921, R 0.844, F1 0.881, ROC-AUC 0.954, PR-AUC 0.963, FPR 7.3%",
+      "context": "test 140,057 rows, unseen domains, threshold 0.5; F1 95% CI 0.879 to 0.883; ROC-AUC 95% CI 0.953 to 0.955",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "Composite-rule winner / best F1",
+      "value": "logistic_regression / lightgbm",
+      "context": "composite = argmax(F1 - mean P(phish) on 8 official HTTPS URLs)",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "External sets: logistic_regression",
+      "value": "official-brand FP 54.4% (162/298); PhishStats recall 91.5% (n=284)",
+      "context": "Layer-1 only, raw P >= 0.5; 219 official and 56 PhishStats URLs share a domain with training rows",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "External sets: random_forest",
+      "value": "official-brand FP 35.2% (105/298); PhishStats recall 86.6% (n=284)",
+      "context": "Layer-1 only, raw P >= 0.5; 219 official and 56 PhishStats URLs share a domain with training rows",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "External sets: xgboost",
+      "value": "official-brand FP 41.9% (125/298); PhishStats recall 89.8% (n=284)",
+      "context": "Layer-1 only, raw P >= 0.5; 219 official and 56 PhishStats URLs share a domain with training rows",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Full-data run (~797K rows)",
+      "metric": "External sets: lightgbm",
+      "value": "official-brand FP 44.3% (132/298); PhishStats recall 88.4% (n=284)",
+      "context": "Layer-1 only, raw P >= 0.5; 219 official and 56 PhishStats URLs share a domain with training rows",
+      "command": "python metrics/scripts/06_full_run.py",
+      "status": "VERIFIED",
+      "source_result_file": "06_full_run.json"
+    },
+    {
+      "section": "Deployed models: split and feature fix (evaluation only)",
+      "metric": "Test rows that share a real registered domain with training rows",
+      "value": "54,358 of 98,082 (55.4%)",
+      "context": "retrain_with_fresh.py kept scheme-less URLs, so 301,164 of 401,918 train rows got a per-URL 'malformed::' group key instead of their domain",
+      "command": "python metrics/scripts/05b_deployed_model_leakfix_eval.py",
+      "status": "VERIFIED",
+      "source_result_file": "05b_deployed_leakfix.json"
+    },
+    {
+      "section": "Deployed models: split and feature fix (evaluation only)",
+      "metric": "random_forest (deployed layer1_primary): as reported -> leak-free rows -> leak-free rows with app features",
+      "value": "ROC-AUC 0.917 -> 0.884 -> 0.866; FPR 14.7% -> 35.4% -> 75.2%; recall 82.4% -> 88.1% -> 98.3%",
+      "context": "leak-free rows: 43,724 (29,915 phishing, 13,809 legit, so F1 is inflated by prevalence; use ROC-AUC and FPR)",
+      "command": "python metrics/scripts/05b_deployed_model_leakfix_eval.py",
+      "status": "VERIFIED",
+      "source_result_file": "05b_deployed_leakfix.json"
+    },
+    {
+      "section": "Deployed models: split and feature fix (evaluation only)",
+      "metric": "logistic_regression (witness): as reported -> leak-free rows -> leak-free rows with app features",
+      "value": "ROC-AUC 0.871 -> 0.836 -> 0.723; FPR 18.6% -> 39.5% -> 77.0%; recall 79.3% -> 86.4% -> 96.1%",
+      "context": "leak-free rows: 43,724 (29,915 phishing, 13,809 legit, so F1 is inflated by prevalence; use ROC-AUC and FPR)",
+      "command": "python metrics/scripts/05b_deployed_model_leakfix_eval.py",
+      "status": "VERIFIED",
+      "source_result_file": "05b_deployed_leakfix.json"
+    },
+    {
+      "section": "Deployed models: split and feature fix (evaluation only)",
+      "metric": "xgboost (witness): as reported -> leak-free rows -> leak-free rows with app features",
+      "value": "ROC-AUC 0.905 -> 0.882 -> 0.847; FPR 12.3% -> 26.4% -> 71.3%; recall 76.5% -> 83.0% -> 97.6%",
+      "context": "leak-free rows: 43,724 (29,915 phishing, 13,809 legit, so F1 is inflated by prevalence; use ROC-AUC and FPR)",
+      "command": "python metrics/scripts/05b_deployed_model_leakfix_eval.py",
+      "status": "VERIFIED",
+      "source_result_file": "05b_deployed_leakfix.json"
+    },
+    {
+      "section": "Deployed models: split and feature fix (evaluation only)",
+      "metric": "lightgbm (witness): as reported -> leak-free rows -> leak-free rows with app features",
+      "value": "ROC-AUC 0.928 -> 0.895 -> 0.855; FPR 13.4% -> 32.0% -> 68.2%; recall 83.7% -> 88.4% -> 97.5%",
+      "context": "leak-free rows: 43,724 (29,915 phishing, 13,809 legit, so F1 is inflated by prevalence; use ROC-AUC and FPR)",
+      "command": "python metrics/scripts/05b_deployed_model_leakfix_eval.py",
+      "status": "VERIFIED",
+      "source_result_file": "05b_deployed_leakfix.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Held-out: dummy_most_frequent",
+      "value": "P 0.000, R 0.000, F1 0.000, ROC-AUC 0.500, PR-AUC 0.456, FPR 0.0%",
+      "context": "saved split of run 20260427_234728: train 401,918 / test 98,082, 14,823 registered domains appear in both (see the split and feature fix section); threshold 0.5",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Held-out: random_forest (deployed layer1_primary)",
+      "value": "P 0.825, R 0.824, F1 0.825, ROC-AUC 0.917, PR-AUC 0.915, FPR 14.7%",
+      "context": "saved split of run 20260427_234728: train 401,918 / test 98,082, 14,823 registered domains appear in both (see the split and feature fix section); threshold 0.5; F1 95% CI 0.822 to 0.827",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Held-out: logistic_regression (witness)",
+      "value": "P 0.782, R 0.793, F1 0.788, ROC-AUC 0.871, PR-AUC 0.862, FPR 18.6%",
+      "context": "saved split of run 20260427_234728: train 401,918 / test 98,082, 14,823 registered domains appear in both (see the split and feature fix section); threshold 0.5; F1 95% CI 0.785 to 0.790",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Held-out: xgboost (witness)",
+      "value": "P 0.839, R 0.765, F1 0.800, ROC-AUC 0.905, PR-AUC 0.903, FPR 12.3%",
+      "context": "saved split of run 20260427_234728: train 401,918 / test 98,082, 14,823 registered domains appear in both (see the split and feature fix section); threshold 0.5; F1 95% CI 0.797 to 0.803",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Held-out: lightgbm (witness)",
+      "value": "P 0.839, R 0.837, F1 0.838, ROC-AUC 0.928, PR-AUC 0.925, FPR 13.4%",
+      "context": "saved split of run 20260427_234728: train 401,918 / test 98,082, 14,823 registered domains appear in both (see the split and feature fix section); threshold 0.5; F1 95% CI 0.836 to 0.841",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Layer-1 FP rate on curated official brand URLs",
+      "value": "29.9% (89 of 298)",
+      "context": "phishing_dataset/dataset_test_recent.csv brand_official rows, collected 2026-04-26; 1 URL(s) in training; raw P >= 0.5",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Layer-1 recall on PhishStats phishing URLs",
+      "value": "94.7% (n=284)",
+      "context": "URLs not in the deployed training split; 61 share a registered domain with training rows; collected ['2025-04-29', '2026-04-26']",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    },
+    {
+      "section": "Deployed models (500K run, shipped in outputs/models)",
+      "metric": "Brier score: raw / shipped calibrator / refit calibrator",
+      "value": "0.1149 / 0.1168 / 0.1129",
+      "context": "deploy_layer1_primary.py copies the model only; the calibrator on disk was fit for a different model (file dated before the RF was deployed).",
+      "command": "python metrics/scripts/05_deployed_model.py",
+      "status": "VERIFIED",
+      "source_result_file": "05_deployed_model.json"
+    }
+  ],
+  "per_step_provenance": {
+    "00_tests": {
+      "generated_utc": "2026-09-29T20:14:31+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "scikit-learn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "pytest-cov": "7.1.0",
+          "playwright": "1.49.0"
+        }
+      }
+    },
+    "01_pipeline": {
+      "generated_utc": "2026-09-29T20:16:01+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "scikit-learn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "pytest-cov": "7.1.0",
+          "playwright": "1.49.0"
+        }
+      }
+    },
+    "02_layer1_eval": {
+      "generated_utc": "2026-09-29T20:17:42+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "scikit-learn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "pytest-cov": "7.1.0",
+          "playwright": "1.49.0"
+        }
+      }
+    },
+    "03_ablations": {
+      "generated_utc": "2026-09-29T20:18:24+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "scikit-learn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "pytest-cov": "7.1.0",
+          "playwright": "1.49.0"
+        }
+      }
+    },
+    "04_suites_and_fp": {
+      "generated_utc": "2026-09-29T20:06:29+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "sklearn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "playwright": "unknown"
+        }
+      }
+    },
+    "05_deployed_model": {
+      "generated_utc": "2026-09-29T20:13:19+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "sklearn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "playwright": "unknown"
+        }
+      }
+    },
+    "05b_deployed_leakfix": {
+      "generated_utc": "2026-09-29T19:34:47+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "sklearn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "playwright": "unknown"
+        }
+      }
+    },
+    "06_full_run": {
+      "generated_utc": "2026-09-29T19:51:43+00:00",
+      "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+      "code_trees": {
+        "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+        "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+        "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+        "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+      },
+      "seed": 42,
+      "environment": {
+        "python": "3.11.15",
+        "os": "Linux 6.18.44-fc-v37",
+        "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 2,
+        "ram_gb": 7.8,
+        "gpu": "none (CPU only)",
+        "packages": {
+          "numpy": "1.26.4",
+          "pandas": "2.3.3",
+          "sklearn": "1.5.1",
+          "xgboost": "2.1.4",
+          "lightgbm": "4.7.0",
+          "joblib": "1.4.2",
+          "tldextract": "5.3.2",
+          "pytest": "8.4.2",
+          "playwright": "unknown"
+        }
+      }
+    }
+  }
+}

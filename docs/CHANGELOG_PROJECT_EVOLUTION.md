@@ -12,14 +12,14 @@ Current status: retained under `archive/legacy`, not the recommended production 
 
 ## Phase 2: Layer-1 ML Pipeline Stabilization
 
-- formalized ingestion/clean/enrich/split/train pipeline in `src/pipeline`
+- formalized ingestion/clean/enrich/split/train pipeline in `src/phishguard`
 - standardized label mapping and leak-safe splitting
 - added repeatable reports and model artifacts
 
 ## Phase 3: App v1 Runtime and Dashboard
 
-- introduced `src/app_v1/analyze_dashboard.py` as JSON runtime entrypoint
-- introduced Streamlit UI `src/app_v1/frontend.py`
+- introduced `src/phishguard/app/dashboard.py` as JSON runtime entrypoint
+- introduced Streamlit UI `src/phishguard/app/frontend.py`
 - added evidence gaps and per-layer explanations
 
 ## Phase 4: Explainable Reinforcement and AI Guardrails
@@ -45,6 +45,6 @@ Current status: retained under `archive/legacy`, not the recommended production 
 
 ## Current Recommended Path
 
-1. Train/evaluate with `src/pipeline`.
-2. Run runtime analysis with `src/app_v1`.
+1. Train/evaluate with `src/phishguard`.
+2. Run runtime analysis with `src/phishguard.app`.
 3. Keep deprecated visual comparison in `archive/legacy` only for reference.

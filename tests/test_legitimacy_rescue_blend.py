@@ -1,9 +1,9 @@
-from src.app_v1.analyze_dashboard import (
+from phishguard.app.dashboard import (
     _apply_dns_feature_dominance_dampening,
     _apply_legitimacy_rescue_on_verdict,
 )
-from src.app_v1.config import PipelineConfig
-from src.app_v1.verdict_policy import Verdict3WayConfig
+from phishguard.app.runtime_config import PipelineConfig
+from phishguard.app.verdict_policy import Verdict3WayConfig
 
 
 def _base_cfg() -> PipelineConfig:

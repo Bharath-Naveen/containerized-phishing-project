@@ -1,4 +1,4 @@
-from src.app_v1.domain_ecosystem import domain_relation
+from phishguard.app.domain_ecosystem import domain_relation
 
 
 def test_same_registrable_domain() -> None:

@@ -6,7 +6,10 @@
 .venv
 venv
 captures
-data
+data/*
+!data/official_domains.json
+!data/reference
+!data/evaluation
 outputs
 logs
 archive

@@ -1,0 +1,80 @@
+{
+ "description": "Live-capture regression cases for the Evidence Adjudication Layer (from the April 2026 EAL validation). 'expected': not_phishing = must not be likely_phishing; phishing = must be likely_phishing; phishing_or_uncertain = must not be likely_legitimate. Live sites change, so a case can fail because the site changed or went offline; the report says which.",
+ "cases": [
+  {
+   "url": "https://app.joinhandshake.com/login",
+   "expected": "not_phishing",
+   "note": "official login (Handshake)"
+  },
+  {
+   "url": "https://mrbslink.weebly.com/",
+   "expected": "phishing",
+   "note": "user-hosted phishing on Weebly"
+  },
+  {
+   "url": "https://gghdgsyttetyeyy72.weebly.com/",
+   "expected": "phishing",
+   "note": "user-hosted phishing on Weebly"
+  },
+  {
+   "url": "https://www.coursera.org/courseraplus/",
+   "expected": "not_phishing",
+   "note": "official content page"
+  },
+  {
+   "url": "https://framer.com/login/",
+   "expected": "not_phishing",
+   "note": "official platform login"
+  },
+  {
+   "url": "https://www.framer.com/",
+   "expected": "not_phishing",
+   "note": "official platform homepage"
+  },
+  {
+   "url": "https://unifiedmentor.podia.com/",
+   "expected": "not_phishing",
+   "note": "creator-platform page"
+  },
+  {
+   "url": "https://unifiedmentor.podia.com/404",
+   "expected": "not_phishing",
+   "note": "creator-platform inactive page"
+  },
+  {
+   "url": "https://www.idtech.com/courses",
+   "expected": "not_phishing",
+   "note": "legitimate business page"
+  },
+  {
+   "url": "https://www.idtech.com/",
+   "expected": "not_phishing",
+   "note": "legitimate business homepage"
+  },
+  {
+   "url": "https://netflix-update-payment-details.vercel.app/",
+   "expected": "phishing",
+   "note": "brand clone on Vercel"
+  },
+  {
+   "url": "https://paypal-login.vercel.app/",
+   "expected": "phishing",
+   "note": "brand clone on Vercel"
+  },
+  {
+   "url": "https://amazon.secure-update-login.co/",
+   "expected": "phishing_or_uncertain",
+   "note": "brand impersonation domain"
+  },
+  {
+   "url": "https://www.netflix.com/",
+   "expected": "not_phishing",
+   "note": "official homepage"
+  },
+  {
+   "url": "https://www.linkedin.com/login",
+   "expected": "not_phishing",
+   "note": "official login / authwall"
+  }
+ ]
+}

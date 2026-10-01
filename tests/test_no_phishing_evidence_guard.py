@@ -1,4 +1,4 @@
-from src.app_v1.analyze_dashboard import (
+from phishguard.app.dashboard import (
     _apply_no_phishing_evidence_override,
     no_phishing_evidence_guard,
 )

@@ -76,3 +76,19 @@ Thumbs.db
 
 # --- Jupyter ---
 .ipynb_checkpoints/
+
+# --- local backup archive (delete after uploading) ---
+phishing_project_backup_*.zip
+
+# --- metrics audit (metrics/reproduce.sh) scratch; results/ and VERIFIED_METRICS.* are committed ---
+metrics/_work/
+.coverage
+
+# --- runtime reference registries (tiny, required by the app and by tests) ---
+!data/reference/
+!data/reference/*.csv
+*.egg-info/
+
+# --- shipped verified model (small, see models/layer1/MANIFEST.json) ---
+!models/layer1/
+!models/layer1/*.joblib

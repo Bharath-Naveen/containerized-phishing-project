@@ -22,23 +22,18 @@ docker build -t phishing-triage:app-v1 .
 
 | Variable | Purpose |
 |----------|---------|
-| `OPENAI_API_KEY` | Optional; enables AI brand/task stage (Streamlit / `app_v1`) and optional LLM helpers. |
 | `PHISH_OUTPUT_DIR` | Capture output root for triage UI (default in container: `/data/captures`). |
 | `PHISH_PROJECT_ROOT` | Repo root inside container (`/app`). |
 | `PHISH_DATA_DIR` | Pipeline data root (`/app/data`). |
 | `PHISH_OUTPUTS_DIR` | Models/metrics (`/app/outputs`). |
 | `PHISH_LOGS_DIR` | Logs (`/app/logs`). |
-| `PHISH_NAV_TIMEOUT_MS`, `PHISH_WAIT_UNTIL`, etc. | Same as `PipelineConfig.from_env()` in `src/app_v1/config.py`. |
+| `PHISH_NAV_TIMEOUT_MS`, `PHISH_WAIT_UNTIL`, etc. | Same as `PipelineConfig.from_env()` in `src/phishguard/app/runtime_config.py`. |
 
-Create a `.env` file in the project root (Compose loads it automatically):
-
-```env
-OPENAI_API_KEY=sk-...
-```
+No API keys are needed to run the app. A `.env` file in the project root (Compose loads it automatically) can override the variables above; see `.env.example`.
 
 ## Run Streamlit dashboard (default)
 
-The default UI is the **phishing analysis dashboard** (`src/app_v1/frontend.py`): Layer-1 ML + optional reinforcement. Legacy screenshot-comparison UI: `archive/legacy/frontend_screenshot_legacy.py`.
+The default UI is the **phishing analysis dashboard** (`src/phishguard/app/frontend.py`): Layer-1 ML + optional reinforcement.
 
 ## Run Streamlit frontend
 
@@ -50,28 +45,19 @@ Open [http://localhost:8501](http://localhost:8501).
 
 Capture artifacts: `./captures` → `/data/captures`.
 
-## Batch ML pipeline (scraping + DNS + training)
+## Train the Layer-1 models
 
-**Run these inside the `pipeline` service** so HTTP fetches and Playwright never execute on the host:
+Run inside the `pipeline` service (the Kaggle CSV must be in `./data/raw/kaggle/`, see `docs/DATASET_SETUP.md`):
 
 ```bash
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.run_all --limit 400
+docker compose --profile pipeline run --rm pipeline python -m phishguard train                 # 50K stratified sample
+docker compose --profile pipeline run --rm pipeline python -m phishguard train --full          # all ~796K rows
 ```
 
-Individual stages:
+Score one URL from the command line:
 
 ```bash
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.ingest
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.clean
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.enrich --limit 200
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.split
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.train
-```
-
-Passive Playwright behavior probe (optional, slower):
-
-```bash
-docker compose --profile pipeline run --rm pipeline python -m src.pipeline.enrich --playwright --limit 50
+docker compose run --rm triage python -m phishguard analyze --url "https://example.com"
 ```
 
 ## Run `debug_capture.py` (single URL)
@@ -79,21 +65,13 @@ docker compose --profile pipeline run --rm pipeline python -m src.pipeline.enric
 From the project root:
 
 ```bash
-docker compose run --rm triage python -m app_v1.debug_capture "https://example.com"
+docker compose run --rm triage python -m phishguard.app.debug_capture "https://example.com"
 ```
 
 Verbose logs:
 
 ```bash
-docker compose run --rm triage python -m app_v1.debug_capture "https://example.com" -v
-```
-
-## Run orchestrator CLI
-
-Write JSONL under the mounted data folder:
-
-```bash
-docker compose run --rm triage python -m app_v1.orchestrator --url "https://example.com" --out /app/data/triage_rows_v1.jsonl
+docker compose run --rm triage python -m phishguard.app.debug_capture "https://example.com" -v
 ```
 
 ## Volumes (host → container)

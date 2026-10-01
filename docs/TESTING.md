@@ -20,7 +20,7 @@ Focus:
 After dataset setup (`docs/DATASET_SETUP.md`):
 
 ```bash
-python -m src.pipeline.run_kaggle_pipeline --sample-size 5000
+phishguard train --sample-size 5000
 ```
 
 Verify key outputs:
@@ -34,13 +34,13 @@ Verify key outputs:
 ### ML-only path
 
 ```bash
-python -m src.app_v1.analyze_dashboard --url "https://example.com" --no-reinforcement
+phishguard analyze --url "https://example.com" --no-reinforcement
 ```
 
 ### Full runtime (with reinforcement)
 
 ```bash
-python -m src.app_v1.analyze_dashboard --url "https://example.com"
+phishguard analyze --url "https://example.com"
 ```
 
 Expected:
@@ -52,7 +52,7 @@ Expected:
 ## 4) Streamlit UI check
 
 ```bash
-streamlit run src/app_v1/frontend.py
+phishguard serve
 ```
 
 Validate that each section renders:

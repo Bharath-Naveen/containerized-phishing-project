@@ -1,9 +1,8 @@
-# Phishing triage app (app_v1) + batch ML pipeline
+# phishguard: phishing triage app + batch ML pipeline
 # Pin Playwright to match the Docker base image tag.
 playwright==1.49.0
 streamlit>=1.28.0,<2
 beautifulsoup4>=4.12.0,<5
-openai>=1.40.0,<2
 
 # Batch pipeline / ML
 pandas>=2.0.0,<3

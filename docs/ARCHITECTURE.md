@@ -4,10 +4,10 @@ This document describes the **active architecture** used by the team and what is
 
 ## High-Level Layers
 
-1. **Layer 1: URL/host ML triage** (`src/pipeline`, runtime in `src/app_v1/ml_layer1.py`)
+1. **Layer 1: URL/host ML triage** (`src/phishguard`, runtime in `src/phishguard/app/ml_layer1.py`)
    - fast score from lexical/hosting/brand-structure features.
    - **Optional multi-model agreement:** `outputs/models/layer1_primary.joblib` remains the authoritative ML probability; additional `logistic_regression`, `random_forest`, `xgboost`, and `lightgbm` artifacts (when present) are scored as witness models. Consensus or disagreement is passed into the deterministic EAL as supporting evidence only, not as a replacement verdict.
-2. **Layer 2: Reinforcement** (`src/app_v1/capture.py`, `org_style_signals.py`)
+2. **Layer 2: Reinforcement** (`src/phishguard/app/capture.py`, `org_style_signals.py`)
    - optional live fetch/capture + org-style checks.
 3. **Layer 3: HTML/DOM + host/path reasoning**
    - `html_structure_signals.py`
@@ -20,7 +20,7 @@ This document describes the **active architecture** used by the team and what is
 
 ## Active Runtime Flow
 
-`src/app_v1/analyze_dashboard.py`:
+`src/phishguard/app/dashboard.py`:
 
 1. Run Layer-1 ML probability.
 2. Optional reinforcement capture.
@@ -33,14 +33,14 @@ This document describes the **active architecture** used by the team and what is
 
 ## Training/Eval Architecture
 
-Primary path (`src/pipeline/run_kaggle_pipeline.py`):
+Primary path (`src/phishguard/pipelines/kaggle.py`):
 
 `kaggle_ingest -> clean -> enrich --layer1-only -> split_leak_safe -> train --layer1-only`
 
 Supporting utilities:
 
-- leakage report: `src/pipeline/leakage_report.py`
-- audits: `src/pipeline/fp_audit.py`, `src/pipeline/phish_audit.py`
+- leakage report: `src/phishguard/evaluation/leakage_report.py`
+- audits: `src/phishguard/evaluation/fp_audit.py`, `src/phishguard/evaluation/phish_audit.py`
 
 ## Deprecated Components
 
@@ -61,5 +61,5 @@ These are **reference-only** and not part of the recommended runtime or training
 ## Why This Architecture
 
 - Keeps model speed (Layer-1) while adding explainability and correction layers.
-- Separates train-time code (`src/pipeline`) from runtime app (`src/app_v1`).
+- Separates train-time code (`src/phishguard`) from runtime app (`src/phishguard.app`).
 - Preserves old code in archive without deleting team history.

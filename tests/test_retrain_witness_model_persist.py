@@ -9,7 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.pipeline.retrain_with_fresh import LAYER1_WITNESS_MODEL_BASENAMES, persist_layer1_witness_models
+from phishguard.pipelines.retrain_with_fresh import LAYER1_WITNESS_MODEL_BASENAMES, persist_layer1_witness_models
 
 
 def _tiny_binary_pipeline() -> Pipeline:

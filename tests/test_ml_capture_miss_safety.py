@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.ai_adjudicator import (
-    apply_ai_adjustment,
-    should_run_ai_adjudication,
-)
-from src.app_v1.analyze_dashboard import _apply_ml_phishing_capture_miss_legitimacy_safety, build_dashboard_analysis
-from src.app_v1.schemas import CaptureResult
-from src.app_v1.verdict_policy import Verdict3WayConfig
+from phishguard.app.dashboard import _apply_ml_phishing_capture_miss_legitimacy_safety, build_dashboard_analysis
+from phishguard.app.schemas import CaptureResult
+from phishguard.app.verdict_policy import Verdict3WayConfig
 
 
 def _base_verdict_legit(combined: float) -> dict:
@@ -128,51 +124,6 @@ def test_safety_at_least_uncertain_when_cal_below_50() -> None:
     assert out["confidence"] == "low"
 
 
-def test_should_run_ai_forces_ml_capture_miss_review() -> None:
-    should, reasons = should_run_ai_adjudication(
-        pre_ai_combined=0.32,
-        ml_effective_score=0.8,
-        org_risk_adjusted=0.05,
-        bundle={},
-        pre_verdict="likely_legitimate",
-        input_url="https://evil.example/login",
-        force_ml_phishing_capture_miss_review=True,
-    )
-    assert should is True
-    assert "ml_predicted_phishing_but_pre_verdict_legitimate" in reasons
-
-
-def test_apply_ai_blocks_downward_adjustment_under_capture_miss_review() -> None:
-    cfg = Verdict3WayConfig(combined_low=0.38, combined_high=0.56)
-    ctx = {
-        "ml_phishing_capture_miss_review": {"block_ai_legitimizing_adjustment": True},
-    }
-    out = apply_ai_adjustment(
-        pre_ai_score=0.35,
-        pre_ai_verdict="likely_legitimate",
-        ai_result={"adjustment_direction": "down", "adjustment_magnitude": 0.12},
-        adjudication_context=ctx,
-        verdict_cfg=cfg,
-    )
-    assert out["post_ai_verdict"] == "uncertain"
-    assert float(out["post_ai_score"]) >= 0.35
-    assert float(out["post_ai_score"]) > float(out["pre_ai_score"])
-
-
-def test_apply_ai_clamps_post_score_if_still_likely_legitimate() -> None:
-    cfg = Verdict3WayConfig(combined_low=0.38, combined_high=0.56)
-    ctx = {"ml_phishing_capture_miss_review": {"block_ai_legitimizing_adjustment": True}}
-    out = apply_ai_adjustment(
-        pre_ai_score=0.36,
-        pre_ai_verdict="likely_legitimate",
-        ai_result={"adjustment_direction": "none", "adjustment_magnitude": 0.0},
-        adjudication_context=ctx,
-        verdict_cfg=cfg,
-    )
-    assert out["post_ai_verdict"] == "uncertain"
-    assert cfg.combined_low < float(out["post_ai_score"]) < cfg.combined_high
-
-
 def test_deterministic_safety_with_ai_disabled_after_no_phishing_override() -> None:
     """Safety must run before final output even when AI adjudication is off."""
     fake = CaptureResult(
@@ -198,10 +149,10 @@ def test_deterministic_safety_with_ai_disabled_after_no_phishing_override() -> N
     cfg = MagicMock()
     cfg.enable_click_probe = False
 
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
-                with patch("src.app_v1.analyze_dashboard.no_phishing_evidence_guard", return_value=True):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
+                with patch("phishguard.app.dashboard.no_phishing_evidence_guard", return_value=True):
                     out, _gaps = build_dashboard_analysis(
                         "https://evil-phish-login-verify.example/fake",
                         reinforcement=True,

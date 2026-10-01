@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.app_v1.html_structure_signals import extract_html_structure_signals
+from phishguard.app.html_structure_signals import extract_html_structure_signals
 
 
 def test_html_structure_extracts_compact_fields(tmp_path: Path) -> None:

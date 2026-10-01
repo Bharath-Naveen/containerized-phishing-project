@@ -1,0 +1,47 @@
+{
+  "command": "python -m pytest -q --cov=src (via metrics/scripts/00_tests.py)",
+  "collected": 253,
+  "passed": 253,
+  "failed": 0,
+  "errors": 0,
+  "skipped": 0,
+  "pass_rate": 1.0,
+  "line_coverage_percent_src": 52.1,
+  "covered_lines": 4500,
+  "num_statements": 8643,
+  "runtime_seconds": 17.8,
+  "not_passed": [],
+  "pytest_exit_code": 0,
+  "requires": "data/reference/*.csv (gitignored before this audit) and outputs/models/*.joblib + outputs/reports/training_config.json for the model smoke tests",
+  "_provenance": {
+    "generated_utc": "2026-09-29T20:14:31+00:00",
+    "git_commit": "9c04fdd46f98f407a04e7ce356279ce0389c1ddf",
+    "code_trees": {
+      "src": "d855aac065f8717d21a17ce8afd05be954d3fcc4",
+      "tests": "dbe8341c37e0ac20c43ca123f9bda1c6cb2f1187",
+      "data/evaluation": "15d94fe810d94f50a6c531413dfeb817af35c3ad",
+      "requirements.txt": "23f4eef21e41b3bc8747930de9fb800dd6729f0f"
+    },
+    "seed": 42,
+    "environment": {
+      "python": "3.11.15",
+      "os": "Linux 6.18.44-fc-v37",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu_count": 2,
+      "ram_gb": 7.8,
+      "gpu": "none (CPU only)",
+      "packages": {
+        "numpy": "1.26.4",
+        "pandas": "2.3.3",
+        "scikit-learn": "1.5.1",
+        "xgboost": "2.1.4",
+        "lightgbm": "4.7.0",
+        "joblib": "1.4.2",
+        "tldextract": "5.3.2",
+        "pytest": "8.4.2",
+        "pytest-cov": "7.1.0",
+        "playwright": "1.49.0"
+      }
+    }
+  }
+}

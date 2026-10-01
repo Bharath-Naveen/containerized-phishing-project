@@ -4,8 +4,8 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from src.app_v1.html_dom_anomaly_signals import extract_html_dom_anomaly_signals
-from src.app_v1.html_structure_signals import extract_html_structure_signals
+from phishguard.app.html_dom_anomaly_signals import extract_html_dom_anomaly_signals
+from phishguard.app.html_structure_signals import extract_html_structure_signals
 
 
 def test_dom_anomaly_branded_anchor_and_external_form(tmp_path: Path) -> None:

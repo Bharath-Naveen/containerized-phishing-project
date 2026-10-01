@@ -1,4 +1,4 @@
-from src.app_v1.org_style_signals import dampen_org_style_for_page_family
+from phishguard.app.org_style_signals import dampen_org_style_for_page_family
 
 
 def test_content_page_brand_mentions_are_dampened_without_trust_context() -> None:

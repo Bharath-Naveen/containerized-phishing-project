@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.pipeline.label_policy import (
+from phishguard.data.labels import (
     INTERNAL_LEGIT,
     INTERNAL_PHISH,
     class_index_for_internal_label,

@@ -2,8 +2,8 @@
 
 import pandas as pd
 
-from src.pipeline.clean import canonicalize_url
-from src.pipeline.simple_legit_augment import augment_cleaned_with_simple_legit, curated_legit_augment_rows
+from phishguard.data.clean import canonicalize_url
+from phishguard.data.augment import augment_cleaned_with_simple_legit, curated_legit_augment_rows
 
 
 def test_curated_legit_merges_simple_and_hard_jsonl() -> None:

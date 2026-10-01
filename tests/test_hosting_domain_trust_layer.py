@@ -1,4 +1,4 @@
-from src.app_v1.analyze_dashboard import (
+from phishguard.app.dashboard import (
     _apply_inactive_site_overlay,
     _apply_platform_context_policy,
     _apply_untrusted_builder_hosting_downgrade,
@@ -9,8 +9,8 @@ from src.app_v1.analyze_dashboard import (
     _evaluate_hosting_domain_trust,
     _load_official_domain_trust_prior_registry,
 )
-from src.app_v1.config import PipelineConfig
-from src.app_v1.verdict_policy import Verdict3WayConfig
+from phishguard.app.runtime_config import PipelineConfig
+from phishguard.app.verdict_policy import Verdict3WayConfig
 
 
 def _cfg() -> PipelineConfig:

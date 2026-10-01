@@ -1,12 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from src.app_v1.analyze_dashboard import (
+from phishguard.app.dashboard import (
     _apply_evidence_adjudication_layer,
     _enrich_capture_and_html_signals,
     build_dashboard_analysis,
     compute_brand_domain_coherence,
 )
-from src.app_v1.schemas import CaptureResult
+from phishguard.app.schemas import CaptureResult
 
 
 def _base_verdict(score: float = 0.6) -> dict:
@@ -436,9 +436,9 @@ def test_no_openai_key_required_when_ai_disabled() -> None:
     }
     cfg = MagicMock()
     cfg.enable_click_probe = False
-    with patch("src.app_v1.analyze_dashboard.PipelineConfig.from_env", return_value=cfg):
-        with patch("src.app_v1.analyze_dashboard.capture_url", return_value=fake):
-            with patch("src.app_v1.analyze_dashboard.predict_layer1", return_value=fake_ml):
+    with patch("phishguard.app.dashboard.PipelineConfig.from_env", return_value=cfg):
+        with patch("phishguard.app.dashboard.capture_url", return_value=fake):
+            with patch("phishguard.app.dashboard.predict_layer1", return_value=fake_ml):
                 out, _ = build_dashboard_analysis("https://www.example.com", reinforcement=True)
     assert (out.get("verdict") or {}).get("evidence_adjudication_applied") is True
     assert "ai_adjudication" not in (out.get("verdict") or {})
@@ -447,7 +447,7 @@ def test_no_openai_key_required_when_ai_disabled() -> None:
 def test_frontend_has_no_ai_toggle() -> None:
     from pathlib import Path
 
-    p = Path("src/app_v1/frontend.py")
+    p = Path("src/phishguard/app/frontend.py")
     txt = p.read_text(encoding="utf-8")
     assert "Enable optional AI analyst notes" not in txt
     assert "AI adjudication" not in txt
@@ -460,7 +460,7 @@ def test_frontend_has_no_ai_toggle() -> None:
 def test_dashboard_cli_has_no_ai_flag() -> None:
     from pathlib import Path
 
-    p = Path("src/app_v1/analyze_dashboard.py")
+    p = Path("src/phishguard/app/dashboard.py")
     txt = p.read_text(encoding="utf-8")
     assert "--ai" not in txt
     assert "OPENAI_API_KEY" not in txt
