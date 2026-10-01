@@ -1,177 +1,105 @@
-# Containerized Phishing Detection Dashboard
+# Phishing Detection System
 
-[![CI](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml/badge.svg)](https://github.com/Bharath-Naveen/containerized-phishing-project/actions/workflows/ci.yml)
+[![CI](https://github.com/Bharath-Naveen/phishing-detection-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Bharath-Naveen/phishing-detection-system/actions/workflows/ci.yml)
 
-Layered phishing detection dashboard combining ML triage and deterministic evidence review for explainable, deployment-ready decisions.
+An explainable phishing detector. Give it a URL and it returns **likely phishing**, **uncertain** or **likely legitimate**, with the reasons behind the verdict. A fast machine-learning model scores the URL, a headless browser loads the page, and a rule-based judge weighs all the evidence. When the evidence disagrees, it says "uncertain" instead of guessing.
 
-## Project Goal
+**[Try the live demo](https://bharathnaveen.com/projects/phishing-detection-system.html#demo)**: paste any URL and the URL model scores it in your browser. Nothing is sent to a server.
 
-Detect phishing reliably while reducing false positives on legitimate modern websites by combining:
-
-- fast URL/domain ML scoring,
-- live browser evidence collection,
-- structural and behavior analysis,
-- deterministic Evidence Adjudication Layer (EAL).
-
-The runtime path is deterministic. AI adjudication is removed/disabled.
-
-## Current Architecture
-
-1. **Layer 1: ML + Model Agreement**
-   - Primary Layer-1 model trained on large URL/host feature data (~500k scale training setup).
-   - Optional witness models (`logistic_regression`, `random_forest`, `xgboost`, `lightgbm`) provide agreement/disagreement signals.
-   - Primary model remains authoritative for ML probability.
-
-2. **Layer 2: Live Capture (Playwright)**
-   - Final URL + redirect chain collection.
-   - Form target capture (same-domain vs cross-domain).
-   - TLS/browser security state (`https`, cert errors, insecure/mixed content indicators).
-
-3. **Layer 3: HTML/DOM + Behavior Signals**
-   - DOM/form/link structure signals.
-   - Wrapper/interstitial, credential harvester, and suspicious-page patterns.
-   - JS/network behavior heuristics (including exfiltration suspicion).
-
-4. **Brand/Trust Context**
-   - Brand-domain coherence (deterministic NLP-style matching).
-   - Official domain trust-prior (`data/official_domains.json`) used as a weak trust anchor, not a whitelist.
-
-5. **Evidence Adjudication Layer (EAL)**
-   - Deterministic phishing/legitimacy/ambiguity scoring.
-   - Hard blockers for high-risk corroborated patterns.
-   - Conservative conflict handling (`uncertain` when evidence disagrees).
-
-## AI Status
-
-- AI/OpenAI adjudication is not used in deployment runtime.
-- No OpenAI key is required for dashboard/CLI operation.
-
-## Setup
-
-### Local Python run
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .            # installs the `phishguard` command
-phishguard serve            # Streamlit dashboard on http://localhost:8501 (uses the verified model in models/layer1/)
-```
-
-One command for everything:
-
-```powershell
-phishguard analyze --url "https://example.com"   # score one URL (add --no-reinforcement for ML-only)
-phishguard train                                 # train on a 50K stratified Kaggle sample (--full for all rows)
-phishguard evaluate                              # every verified metric + model card (after phishguard train)
-phishguard evaluate-live                         # full system with live page capture (needs internet; runs in GitHub Actions)
-phishguard deploy                                # ship the latest trained model bundle
-```
-
-### Docker run
-
-```bash
-docker compose build
-docker compose up
-```
-
-Then open [http://localhost:8501](http://localhost:8501).
-
-## Example URLs to Validate Behavior
-
-- LinkedIn official profile/login (`linkedin.com`) -> `likely_legitimate` or `uncertain`
-- Virgin Atlantic (`virginatlantic.com`) -> `likely_legitimate` or `uncertain`
-- Coursera (`coursera.org`) -> `likely_legitimate` or `uncertain`
-- Suspicious Weebly/user-hosted sample -> `likely_phishing`
-- Vercel brand clone (`paypal-login.vercel.app`, `netflix-update-payment-details.vercel.app`) -> `likely_phishing`
-
-## How to Interpret Verdicts
-
-- `likely_phishing`: corroborated high-risk phishing evidence.
-- `uncertain`: evidence conflict or insufficient corroboration; manual review recommended.
-- `likely_legitimate`: strong legitimacy evidence with no high-risk phishing blockers.
+Built solo as an MS capstone, then rebuilt so that every number below can be regenerated with one script.
 
 ## Results
 
-Every number here comes from `phishguard evaluate` (seed 42) and is saved with its command, commit, data hash and environment in [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Regenerate everything with `bash metrics/reproduce.sh` (about 25 minutes on 2 CPU cores). Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
+| What was measured | Result |
+|---|---|
+| URL model (XGBoost) on 147,702 test URLs from websites it never saw in training | F1 0.801 (95% CI 0.799 to 0.803), ROC-AUC 0.880, precision 0.772, recall 0.832 |
+| 136 real brand sites (PayPal, Microsoft, Chase, Amazon and others), URL model alone | 40.4% flagged as phishing |
+| The same 136 sites, full system with page capture | 4 called phishing, 24 uncertain, 108 legitimate |
+| 99 fresh phishing pages from the PhishStats feed, full system | 39 called phishing, 20 uncertain, 40 legitimate |
+| Time per URL | 15.7 ms for the URL model, 6.8 s median with live page capture |
+| Automated tests | 373, all passing, run in GitHub Actions on every push along with a Docker build |
 
-Layer-1 URL model, trained on the full Kaggle dataset (794,563 deduplicated URLs) and tested on 147,702 URLs from domains never seen in training (threshold 0.5):
+**What it is good at, and what it is not.** The layers do their job of not crying wolf on real sites: the URL model alone would flag 40.4% of real brand pages, and the full system flags 4 of 136. Catching brand-new phishing is the weak spot (39 of 99). The URL model scores many famous homepages as high as phishing pages, so no rule can separate them without adding false alarms. A better URL model is the next step.
 
-| Model | F1 (95% CI) | ROC-AUC | Precision | Recall | False-positive rate |
-|---|---|---|---|---|---|
-| Majority-class baseline | 0.000 | 0.500 | 0.000 | 0.000 | 0.0% |
-| **XGBoost (selected on validation data)** | 0.801 (0.799 to 0.803) | 0.880 | 0.772 | 0.832 | 21.3% |
-| Random Forest | 0.793 | 0.884 | 0.784 | 0.802 | 19.2% |
-| LightGBM | 0.803 | 0.877 | 0.764 | 0.847 | 22.7% |
+Full tables, with the command, commit, data hash and environment that produced them: [metrics/VERIFIED_METRICS.md](metrics/VERIFIED_METRICS.md). Model card: [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
 
-- Tests: 372 of 372 pass; 53.5% line coverage of `src/phishguard`.
-- Real-world checks (never in training): the URL model alone flags 40.4% of 136 official brand URLs and 81.0% of 284 PhishStats phishing URLs. Without live capture the adjudication layer turns none of the official URLs into a phishing verdict (all go to `uncertain`).
+## How it works
 
-Full system with live page capture, replaying one frozen snapshot of real pages (captured by GitHub Actions; rules tuned on the validation half only, test half scored once; plan in [docs/rebuild/TUNING_PLAN.md](docs/rebuild/TUNING_PLAN.md)):
+A URL passes through five layers:
 
-| Test half | Labeled likely_phishing | uncertain | likely_legitimate |
-|---|---|---|---|
-| 136 official brand URLs (legitimate) | 4 | 24 | 108 |
-| 99 fresh PhishStats phishing URLs (captured) | 39 | 20 | 40 |
+1. **URL model and model agreement.** XGBoost scores 54 features of the URL text (lengths, entropy, lure words, brand names in the wrong place, free hosting). Three more models (Logistic Regression, Random Forest, LightGBM) vote as supporting evidence. No network access is needed.
+2. **Live capture.** Playwright loads the page and records the final URL, redirects, form targets and TLS state.
+3. **HTML and behavior.** Login harvesters, wrapper pages, cross-domain forms and suspicious scripts are detected from the captured page.
+4. **Brand and trust context.** Does the brand on the page match the domain? A small registry of official domains is used as a weak prior, never as a whitelist.
+5. **Evidence Adjudication Layer.** A deterministic judge adds up phishing, legitimacy and ambiguity signals, applies hard blockers (for example a password form posting to another domain) and returns the verdict with its reasons.
 
-- The system is good at not crying wolf on real sites, and weak at catching fresh phishing: the URL model scores many famous homepages as high as phishing, so rules cannot separate the two without adding false alarms.
-- Full path (Playwright capture plus analysis): p50 6.8 s, p95 15.0 s per URL on a GitHub-hosted runner. URL model alone: p50 15.7 ms.
-- These numbers replace an earlier audit of the original code, which had a leaky split; that record is in `metrics/audit_baseline/`.
+No external AI service is called at runtime, so the same input always gives the same verdict.
 
-## Known Limitations
+More detail in plain language: [docs/rebuild/HOW_IT_WORKS.md](docs/rebuild/HOW_IT_WORKS.md).
 
-- URL-based ML can over-alert on modern JS-heavy sites.
-- Live capture can be affected by anti-bot systems, geofencing, or headless blocking.
-- Official trust-prior is not a whitelist and does not auto-trust suspicious behavior.
-- `uncertain` is intentional for conflict cases where deterministic evidence disagrees.
+## Why the numbers can be trusted
 
-## Deployment Notes
+An audit of the first version found a leaky train/test split and other problems, so training and evaluation were rebuilt. The full record is in [docs/rebuild/REBUILD_LOG.md](docs/rebuild/REBUILD_LOG.md).
 
-- **Laptop/local run**: only users on the same machine (or LAN if allowed) can access the dashboard.
-- **Public access**: deploy to a hosted environment (VPS/cloud), e.g. AWS, GCP, Azure, Render, Fly.io, Railway, etc.
-- Expose port `8501` and secure access (HTTPS + auth/network controls) before sharing publicly.
-- Never store secrets in repo files or compose files.
+- **Split by website.** Train and test are split by registered domain, so no website is in both. A guard stops the run if any domain overlaps.
+- **No dataset shortcut.** In this dataset `https` is far more common on phishing rows, so features are computed without the scheme.
+- **Evaluation stays out of training.** Every curated evaluation URL is removed from the training data.
+- **Model chosen on validation data.** The test set is never used to pick a model or tune a rule.
+- **Rule tuning written down first.** The plan was fixed before any tuning ([docs/rebuild/TUNING_PLAN.md](docs/rebuild/TUNING_PLAN.md)), rules were tuned on a validation half of one saved snapshot of real pages, and the test half was scored once.
+- **One command reproduces everything.** `bash metrics/reproduce.sh` retrains and re-evaluates from scratch (seed 42, about 25 minutes on 2 CPU cores).
+- **The demo is the evaluated model.** The in-browser version is checked against the Python app: identical features and scores on 148,746 URLs and identical verdicts on 21,032 ([demo/](demo/)).
 
-## Repo Layout
+## Run it
 
-```text
-.
-├── src/phishguard/
-│   ├── urls/          # URL parsing + the one canonical/scheme-neutral normalizer
-│   ├── data/          # Kaggle ingest, clean, sample, evaluation sets, enrich, domain-grouped split
-│   ├── features/      # Layer-1 URL/host features
-│   ├── models/        # training (validated selection, model bundle), deploy
-│   ├── pipelines/     # end-to-end training pipelines (phishguard train)
-│   ├── evaluation/    # URL suites, false-positive / phishing audits, reports
-│   ├── app/           # dashboard, EAL, capture, signals, Streamlit UI
-│   ├── guards.py      # checks that stop leaky splits and train/serve skew
-│   ├── config.py      # seed and defaults
-│   └── cli.py         # the phishguard command
-├── tests/             # unit, regression and golden-output tests
-├── metrics/           # verified, reproducible metrics (see Results)
-├── docs/rebuild/      # how it works + rebuild log
-├── models/layer1/     # the verified model the app ships (MANIFEST.json has hashes and provenance)
-├── data/              # evaluation sets + registries (tracked); raw/processed data (gitignored)
-├── .github/workflows/ # CI (tests + Docker build) and the live-capture evaluation
-├── archive/legacy/    # retired AI adjudication path and old scripts
-├── Dockerfile, docker-compose.yml, pyproject.toml
-└── README.md
-```
-
-Generated runtime artifacts should remain untracked:
-
-- `captures/`
-- `outputs/fresh_retrain_runs/`
-- `outputs/reports/` debug artifacts
-- `data/processed/`
-- temporary CSV/JSONL exports
-
-## Tests
+With Docker (the image includes the browser and the verified model):
 
 ```bash
-pytest            # full suite, including golden-output tests that pin the dashboard's behavior
+docker compose up --build
 ```
 
-## Rebuild in progress
+Then open http://localhost:8501.
 
-This project is being rebuilt for verified, reproducible results. What changed and why: [docs/rebuild/REBUILD_LOG.md](docs/rebuild/REBUILD_LOG.md). How the system works: [docs/rebuild/HOW_IT_WORKS.md](docs/rebuild/HOW_IT_WORKS.md).
+Or locally with Python 3.11:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .\.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+playwright install chromium
+phishguard serve                 # dashboard on http://localhost:8501
+```
+
+The `phishguard` command:
+
+| Command | What it does |
+|---|---|
+| `phishguard analyze --url "https://example.com"` | Score one URL (add `--no-reinforcement` to skip the page capture) |
+| `phishguard serve` | Start the dashboard |
+| `phishguard train` | Train on a 50,000-row sample (`--full` for the whole dataset; needs the Kaggle CSV, see [docs/DATASET_SETUP.md](docs/DATASET_SETUP.md)) |
+| `phishguard evaluate` | Regenerate the verified metrics and the model card |
+| `phishguard evaluate-live` | Evaluate the full system with live page capture (run by GitHub Actions) |
+| `pytest` | Run the tests, including golden-output tests that pin the dashboard's behavior |
+
+Live capture fills a dummy login on pages with a password field, to see where credentials go. Set `PHISH_ENABLE_LOGIN_INTERACTION=false` to turn that off.
+
+## Repo layout
+
+```text
+src/phishguard/     the package: urls, data, features, models, pipelines, evaluation, app (dashboard, capture, judge)
+models/layer1/      the verified model the app ships, with hashes in MANIFEST.json
+metrics/            verified metrics, raw results and the reproduce script
+data/evaluation/    evaluation URL sets and the frozen snapshot of real pages
+demo/               export, parity tests and page builder for the in-browser demo
+tests/              unit, regression, golden-output and JS parity tests
+docs/               how it works, rebuild log, tuning plan, model card
+archive/legacy/     retired code (an earlier AI adjudication path, old scripts)
+```
+
+## Limitations
+
+- Recall on fresh phishing is low, as shown above.
+- A URL-only model cannot see page content, so it over-flags modern legitimate sites; the page layers correct most of that.
+- Live capture can be blocked by bot checks or shown harmless content by phishing kits, and phishing pages are often taken down within hours.
+- When a page cannot be loaded, a high URL score usually ends as "likely phishing", which claims more certainty than the evidence gives.
+- The training data has no dates, so performance on future campaigns is measured only on the PhishStats samples.
