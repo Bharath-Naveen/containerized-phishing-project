@@ -1,18 +1,22 @@
 {
   "provenance": {
-    "generated_utc": "2026-09-30T08:14:14+00:00",
-    "git_commit": "be39bd122e41c8bc3cc2cef4126d3ffcaea460d3",
-    "git_dirty_tracked_files": false,
+    "generated_utc": "2026-09-30T23:51:06+00:00",
+    "git_commit": "618516e321d8052fc78c1bf6490382ff5988c0b7",
+    "git_dirty_tracked_files": true,
     "code_trees": {
-      "src": "883bb3c59f862880ea0e3bd729fb5065574435df",
-      "tests": "6b038a0a67193007b8954555ee2d97792f796fae",
-      "data/evaluation": "075500398c40b53b6f70626df998c499e5adb11f"
+      "src": "468470e060e0c1df16bc8f0ed8569a33df7d31bc",
+      "tests": "61670bc6de887b105231ac6a4356d2a81b11d4a7",
+      "data/evaluation": "a5fd2fd9ec2fdba5ef15712a12e2ec7316a384d1"
     },
     "seed": 42,
+    "runtime_model": {
+      "dir": "outputs/models",
+      "bundle_sha256": "8f7f40dcfea53f6828fa1ceb80712953ccab3958c175afdfb6668e02190fa960"
+    },
     "environment": {
       "python": "3.11.15",
       "os": "Linux 6.18.44-fc-v50",
-      "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+      "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
       "cpu_count": 2,
       "gpu": "none (CPU only)",
       "packages": {
@@ -127,50 +131,50 @@
         "n": 147702
       },
       "logistic_regression": {
-        "precision": 0.6788143348255138,
-        "recall": 0.8005629448139073,
-        "f1": 0.734678854879077,
-        "false_positive_rate": 0.3282154320519625,
-        "accuracy": 0.7315676158752082,
+        "precision": 0.678816137729735,
+        "recall": 0.8004462723136156,
+        "f1": 0.734630777261715,
+        "false_positive_rate": 0.3281648848788132,
+        "accuracy": 0.7315405343191019,
         "confusion_matrix": {
-          "tn": 53161,
-          "fp": 25973,
-          "fn": 13675,
-          "tp": 54893
+          "tn": 53165,
+          "fp": 25969,
+          "fn": 13683,
+          "tp": 54885
         },
-        "roc_auc": 0.7733697061740181,
-        "pr_auc": 0.6970662498479387,
+        "roc_auc": 0.7731229704260969,
+        "pr_auc": 0.6957762321446522,
         "n": 147702,
         "validation": {
-          "val_pr_auc": 0.8973599578895542,
-          "val_roc_auc": 0.8598620048615481,
-          "val_f1": 0.811575490498779,
+          "val_pr_auc": 0.8972717667440554,
+          "val_roc_auc": 0.8598447145750896,
+          "val_f1": 0.8114537032704815,
           "val_official_brand_fp_rate": 0.3148148148148148
         },
         "bootstrap_95ci": {
           "precision": [
-            0.6756728267926624,
-            0.682111338376629
+            0.675651278620784,
+            0.6820928509368591
           ],
           "recall": [
-            0.7975618471300538,
-            0.803450861904802
+            0.7974591686849244,
+            0.8032889419651158
           ],
           "f1": [
-            0.7321345501940673,
-            0.7372297766505203
+            0.7320465691708337,
+            0.7371768329264108
           ],
           "false_positive_rate": [
-            0.3247112590330168,
-            0.3312529388808446
+            0.3246976883908502,
+            0.33123881619732637
           ],
           "roc_auc": [
-            0.7711182755441287,
-            0.7755678941724035
+            0.7708644860474215,
+            0.7753126264842607
           ],
           "pr_auc": [
-            0.6934399074678275,
-            0.7007349228205503
+            0.6921114743850424,
+            0.6994912309500285
           ]
         }
       },
@@ -324,7 +328,7 @@
     "model": "xgboost",
     "selection_policy": "validated",
     "selection_rule": "highest validation PR-AUC (domain-grouped validation split of the training rows); tie-break: fewer false alarms on the official-brand validation half",
-    "bundle_created_utc": "2026-09-30T08:14:11+00:00",
+    "bundle_created_utc": "2026-09-30T23:51:04+00:00",
     "bundle_train_csv_sha256": "c70ccdbc171e6b1ee026db12908c7178a2f8bd13d75ea5e4326453cad43bce0f",
     "app_threshold_calibrated_ge_0_5": {
       "precision": 0.7555093768439416,
@@ -387,28 +391,28 @@
       },
       "logistic_regression": {
         "precision": {
-          "mean": 0.7297674379490623,
-          "std": 0.028265132702371718
+          "mean": 0.7298822089118293,
+          "std": 0.02804269033406456
         },
         "recall": {
-          "mean": 0.7905401317281545,
-          "std": 0.017528345485752127
+          "mean": 0.7905432417449504,
+          "std": 0.017502327680289347
         },
         "f1": {
-          "mean": 0.7586563615702662,
-          "std": 0.017848201227520108
+          "mean": 0.7587246174663772,
+          "std": 0.01776494527086078
         },
         "roc_auc": {
-          "mean": 0.831858601985369,
-          "std": 0.019521393963401933
+          "mean": 0.831889796168988,
+          "std": 0.019404763467769412
         },
         "pr_auc": {
-          "mean": 0.8352198256772102,
-          "std": 0.027139477936315708
+          "mean": 0.8352931700332965,
+          "std": 0.02696952791640899
         },
         "false_positive_rate": {
-          "mean": 0.28454073079377973,
-          "std": 0.04554330229944865
+          "mean": 0.28433101868453947,
+          "std": 0.04495682148456454
         }
       },
       "random_forest": {
@@ -426,11 +430,11 @@
         },
         "roc_auc": {
           "mean": 0.902059486390065,
-          "std": 0.012086663944011563
+          "std": 0.01208666394401157
         },
         "pr_auc": {
-          "mean": 0.9017575731624129,
-          "std": 0.013982467748866778
+          "mean": 0.9017575732571865,
+          "std": 0.013982467713137799
         },
         "false_positive_rate": {
           "mean": 0.16576846243277882,
@@ -635,27 +639,27 @@
   },
   "latency_ms": {
     "n_urls": 400,
-    "hardware": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "hardware": "Intel(R) Xeon(R) Processor @ 2.80GHz",
     "layer1_only": {
-      "p50": 14.626095500261727,
-      "p95": 20.703141649391902
+      "p50": 15.73216349993345,
+      "p95": 22.720211549835767
     },
     "dashboard_ml_only_incl_eal": {
-      "p50": 149.07435850000184,
-      "p95": 188.75667430047537
+      "p50": 157.79342849987188,
+      "p95": 200.4833577499084
     },
     "note": "warm process, one URL at a time, includes 4-model agreement"
   },
   "tests": {
-    "collected": 365,
-    "passed": 365,
+    "collected": 372,
+    "passed": 372,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "pass_rate": 1.0,
-    "runtime_seconds": 11.6,
+    "runtime_seconds": 14.8,
     "command": "pytest",
-    "line_coverage_percent": 54.0
+    "line_coverage_percent": 53.5
   },
-  "runtime_seconds": 567.9
+  "runtime_seconds": 555.3
 }

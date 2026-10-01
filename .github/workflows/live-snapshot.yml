@@ -5,12 +5,9 @@ name: Live capture snapshot
 # every before/after number is measured on the same pages. See docs/rebuild/TUNING_PLAN.md.
 # Capture submits a dummy login (test.user@example.com) on login forms, as the app does.
 
+# Manual only (Actions tab): the snapshot used for rule tuning was captured once, by GitHub Actions
+# run 36772263380. A new snapshot is a new dataset, so take one only on purpose.
 on:
-  push:
-    branches: [rebuild/verified-metrics]
-    paths:
-      - .github/workflows/live-snapshot.yml
-      - src/phishguard/evaluation/snapshot.py
   workflow_dispatch:
     inputs:
       phishing:

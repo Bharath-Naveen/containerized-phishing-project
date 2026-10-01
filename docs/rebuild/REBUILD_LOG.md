@@ -279,3 +279,32 @@ What this means for claims: the full system's value today is **low false alarms 
 - **Frozen snapshot tooling.** `phishguard snapshot-live` (workflow `live-snapshot.yml`) captures every evaluation URL once and commits the capture records plus page HTML as one gzipped file. `phishguard replay --split val|test|all` runs the full analysis on those saved captures with no network, so before/after numbers compare the same pages. Every test-split replay is logged to `metrics/results/test_access_log.jsonl`.
 - **One amendment made before any capture**: a dry run of URL selection showed that grouping fresh phishing by registered domain would collapse every godaddysites.com / sharepoint.com page into one, so grouping and the "popular site" exclusion use the host instead. Recorded in the plan.
 - Tests: 370 pass (new `tests/test_snapshot.py` freezes two fake captures and checks two replays give identical verdicts).
+
+## 2026-09-30 · Phase 4b: rule tuning, step 2 (results)
+
+**Frozen snapshot** (GitHub Actions run 36772263380, commit `4b856de`): 746 URLs captured once, 713 captured cleanly, saved as `data/evaluation/frozen/live_snapshot_20260930.jsonl.gz` (41.5 MB, sha256 `517d4560b4c3...`). Fresh phishing came from PhishStats (960 rows fetched, 240 hosts kept).
+
+**What changed** (`app/eal.py`, one new idea used in two places): a *coherent first-party page* is one where the title or header names the site's own domain, the visit stayed on that registered domain, the transport is valid HTTPS, and nothing posts or leaks off-site. When another brand is mentioned on the page (Apple Pay on a bank page) that is tolerated only if no brand sits in the host or path and the host does not carry a big-brand name unless it is that brand's official domain.
+
+1. A password form with an empty action (how most modern sites submit, via JavaScript) is no longer a hard "credential harvesting" blocker on a coherent first-party page. Sparse brand-login clones and forms that post to another domain are still hard blockers.
+2. The wrapper/interstitial blocker skips coherent first-party pages too (sign-in redirects inside Google, Bank of America and similar).
+
+**Result** (replaying the same saved pages; shipped model; `metrics/results/tuning/`):
+
+| Split | Rules | Legit pages labeled phishing | of which official brand | Fresh phishing caught | Fresh phishing called legitimate |
+|---|---|---|---|---|---|
+| val | before | 41 / 273 | 19 / 162 | 25 / 109 | 41 / 109 |
+| val | after | 28 / 273 | 11 / 162 | 25 / 109 | 41 / 109 |
+| test | before | 22 / 212 | 7 / 136 | 39 / 99 | 40 / 99 |
+| test | after | 19 / 212 | 4 / 136 | 39 / 99 | 40 / 99 |
+
+On test exactly three pages changed, all legitimate sign-in pages (Dropbox login, Dropbox home, Chase auth), and no phishing page changed. The 103 golden dashboard cases did not change.
+
+**What did not work, and why it was not forced:**
+- *Catching more fresh phishing.* The URL model gives 0.99 to plain homepages like tesla.com and webex.com, so "high URL score plus a clean-looking page" catches as many legitimate sites as phishing ones (at 0.95 on val: 46 phishing, 31 legitimate). Turning that into a phishing verdict would add false alarms, which the plan forbids. Recall stays low (23% val, 39% test); the model is the lever, not the rules.
+- *Failed captures.* Legitimate and phishing pages that fail to load carry identical evidence (high URL score, nothing to look at). Recall excludes failed captures, so relaxing them would have looked free on paper while missing real phishing. Left unchanged.
+- *A "victim email in the URL" rule* (for example `?email=a@a.com`) looked useful at first but added nothing once scored with the correct model; the plan's tie rule keeps the smaller change, so it was removed.
+
+**A mistake caught along the way (and fixed):** the cloud workspace had an `outputs/models` folder with the pre-rebuild model (left over from an older copy of the repo, dated 29 September). The app used any `outputs/models` folder in preference to the verified model in `models/layer1`, so the first tuning pass and one test-split run scored URLs with the stale model while GitHub Actions used the right one. Found because a before/after comparison changed pages the new rules could not touch. Fixes: the loader now ignores a folder without a model bundle (with a warning, test added), every report records which model file was loaded and its hash, the tuning was redone with the correct model, and the bad test run is kept in `metrics/results/test_access_log.jsonl` marked invalid. To check whether the Phase 3 "dashboard ML-only" numbers had the same problem, the full reproduce script was run again (`metrics/reproduce.sh`): those rows came out identical, so Phase 3 had the right model (the stale folder arrived later, when this workspace was restored). XGBoost, LightGBM and Random Forest reproduced exactly; the freshly trained bundle gives the same probabilities as the shipped one (max difference 0.0 on 5,000 test rows). Logistic regression, one of the four supporting models, moved slightly (8 of 147,702 test predictions; F1 0.7347 to 0.7346), so its numbers are reproducible to about three decimals rather than exactly. The test rows were seen once in that bad run; nothing from them was used to choose rules (the final rules are a subset of what was chosen on val before that run).
+
+The Windows checkout was checked as well: its `outputs/models` already holds the verified bundle (same sha256 as `models/layer1`), with the old files archived in a subfolder, so it was never affected.

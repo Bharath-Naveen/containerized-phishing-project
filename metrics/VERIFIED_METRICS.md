@@ -2,11 +2,11 @@
 
 Every number below was produced by running `phishguard evaluate` on the trained run. Nothing is copied from older reports. No synthetic data is used. Raw values: `metrics/results/evaluation.json`.
 
-- Generated: 2026-09-30T08:14:14+00:00
-- Git commit: `be39bd122e41c8bc3cc2cef4126d3ffcaea460d3`
-- Code trees: src `883bb3c59f`, tests `6b038a0a67`, data/evaluation `075500398c`
+- Generated: 2026-09-30T23:51:06+00:00
+- Git commit: `618516e321d8052fc78c1bf6490382ff5988c0b7` (with uncommitted changes)
+- Code trees: src `468470e060`, tests `61670bc6de`, data/evaluation `a5fd2fd9ec`
 - Seed: 42 (sampling, splits, models, bootstrap)
-- Environment: Python 3.11.15, Linux 6.18.44-fc-v50, Intel(R) Xeon(R) Processor @ 2.10GHz (2 vCPU), none (CPU only)
+- Environment: Python 3.11.15, Linux 6.18.44-fc-v50, Intel(R) Xeon(R) Processor @ 2.80GHz (2 vCPU), none (CPU only)
 - Packages: numpy 1.26.4, pandas 2.3.3, scikit-learn 1.5.1, xgboost 2.1.4, lightgbm 4.7.0, joblib 1.4.2, tldextract 5.3.2, pytest 8.4.2, playwright 1.49.0
 - Reproduce: `phishguard train --full` then `phishguard evaluate --with-tests` (see `metrics/reproduce.sh`)
 
@@ -21,7 +21,7 @@ Every number below was produced by running `phishguard evaluate` on the trained 
 | Official brand URLs the dashboard calls likely_phishing | 0.0% | ML-only dashboard path (no live capture); the rest are routed to uncertain |
 | Real PhishStats phishing URLs flagged by Layer 1 | 81.0% | 284 URLs collected 2025-04 to 2026-04, hosts excluded from training |
 | PhishStats URLs the dashboard calls likely_phishing | 24.3% | ML-only dashboard path |
-| Tests | 365 / 365 passed | 54.0% line coverage of src/phishguard |
+| Tests | 372 / 372 passed | 53.5% line coverage of src/phishguard |
 
 ## Data
 
@@ -43,7 +43,7 @@ Every number below was produced by running `phishguard evaluate` on the trained 
 | Model | Precision | Recall | F1 | F1 95% CI | ROC-AUC | PR-AUC | FPR | TN / FP / FN / TP |
 |---|---|---|---|---|---|---|---|---|
 | Majority-class baseline | 0.000 | 0.000 | 0.000 | n/a | 0.500 | 0.464 | 0.0% | 79,134 / 0 / 68,568 / 0 |
-| Logistic Regression | 0.679 | 0.801 | 0.735 | 0.732 to 0.737 | 0.773 | 0.697 | 32.8% | 53,161 / 25,973 / 13,675 / 54,893 |
+| Logistic Regression | 0.679 | 0.800 | 0.735 | 0.732 to 0.737 | 0.773 | 0.696 | 32.8% | 53,165 / 25,969 / 13,683 / 54,885 |
 | Random Forest | 0.784 | 0.802 | 0.793 | 0.791 to 0.795 | 0.884 | 0.866 | 19.2% | 63,966 / 15,168 / 13,585 / 54,983 |
 | XGBoost (primary) | 0.772 | 0.832 | 0.801 | 0.799 to 0.803 | 0.880 | 0.849 | 21.3% | 62,253 / 16,881 / 11,499 / 57,069 |
 | LightGBM | 0.764 | 0.847 | 0.803 | 0.801 to 0.806 | 0.877 | 0.833 | 22.7% | 61,203 / 17,931 / 10,502 / 58,066 |
@@ -57,7 +57,7 @@ Selection: highest validation PR-AUC (domain-grouped validation split of the tra
 | Model | F1 | ROC-AUC | PR-AUC | FPR |
 |---|---|---|---|---|
 | Majority-class baseline | 0.125 ± 0.280 | 0.500 ± 0.000 | 0.492 ± 0.025 | 20.0% ± 44.7 |
-| Logistic Regression | 0.759 ± 0.018 | 0.832 ± 0.020 | 0.835 ± 0.027 | 28.5% ± 4.6 |
+| Logistic Regression | 0.759 ± 0.018 | 0.832 ± 0.019 | 0.835 ± 0.027 | 28.4% ± 4.5 |
 | Random Forest | 0.815 ± 0.013 | 0.902 ± 0.012 | 0.902 ± 0.014 | 16.6% ± 2.3 |
 | XGBoost | 0.828 ± 0.015 | 0.908 ± 0.016 | 0.907 ± 0.019 | 18.3% ± 2.5 |
 | LightGBM | 0.830 ± 0.013 | 0.909 ± 0.019 | 0.906 ± 0.022 | 19.0% ± 2.6 |
@@ -94,8 +94,8 @@ Without live capture the adjudication layer treats missing page evidence as a re
 
 | Path | p50 | p95 | Context |
 |---|---|---|---|
-| Layer 1 only (features + model + calibration) | 14.6 ms | 20.7 ms | 400 held-out URLs; Intel(R) Xeon(R) Processor @ 2.10GHz; warm process, one URL at a time, includes 4-model agreement |
-| Dashboard, ML-only (all rules + EAL) | 149.1 ms | 188.8 ms | same URLs |
+| Layer 1 only (features + model + calibration) | 15.7 ms | 22.7 ms | 400 held-out URLs; Intel(R) Xeon(R) Processor @ 2.80GHz; warm process, one URL at a time, includes 4-model agreement |
+| Dashboard, ML-only (all rules + EAL) | 157.8 ms | 200.5 ms | same URLs |
 
 ## Full system with live page capture
 
@@ -122,6 +122,20 @@ Edge cases that did not pass:
 |---|---|---|---|
 | `https://mrbslink.weebly.com/` | phishing | uncertain | True |
 | `https://gghdgsyttetyeyy72.weebly.com/` | phishing | uncertain | True |
+
+
+## Rule tuning on a frozen live snapshot
+
+Pre-registered in `docs/rebuild/TUNING_PLAN.md`. Every number below replays the same saved captures (`data/evaluation/frozen/live_snapshot_20260930.jsonl.gz`, sha256 `517d4560b4c3`, captured 2026-09-30) through the full analysis with no network access. Rules were changed using the val split only. The test split was scored once with the old rules and once with the final rules; one more test run, made with a stale model by mistake, is logged and discarded (`metrics/results/test_access_log.jsonl`). Model: the shipped Layer 1 bundle.
+
+| Split | Rules | Legitimate pages labeled likely_phishing | of which official brand | Fresh phishing labeled likely_phishing | Fresh phishing labeled likely_legitimate |
+|---|---|---|---|---|---|
+| val | before | 41 / 273 (15.0%) | 19 / 162 | 25 / 109 (22.9%) | 41 / 109 |
+| val | after | 28 / 273 (10.3%) | 11 / 162 | 25 / 109 (22.9%) | 41 / 109 |
+| test | before | 22 / 212 (10.4%) | 7 / 136 | 39 / 99 (39.4%) | 40 / 99 |
+| test | after | 19 / 212 (9.0%) | 4 / 136 | 39 / 99 (39.4%) | 40 / 99 |
+
+Legitimate pages: official brand URLs, popular homepages (Tranco), hard legitimate and curated legitimate URLs (all captures, failed ones included). Fresh phishing: newest PhishStats URLs whose capture succeeded and whose host is not itself a top-10K site. Feed labels mean reported as phishing; some pages were already replaced by harmless content when captured.
 
 
 ## Earlier baseline

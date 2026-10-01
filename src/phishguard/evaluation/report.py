@@ -77,6 +77,43 @@ def live_section(lv: Dict[str, Any]) -> List[str]:
     return L
 
 
+def _load_tuning():
+    import json
+
+    from phishguard.paths import project_root
+
+    d = project_root() / "metrics" / "results" / "tuning"
+    names = ("val_before", "val_after", "test_before", "test_after")
+    if not all((d / f"{n}.json").is_file() for n in names):
+        return None
+    return {n: json.loads((d / f"{n}.json").read_text(encoding="utf-8")) for n in names}
+
+
+def tuning_section(t: Dict[str, Any]) -> List[str]:
+    snap = t["test_after"]["snapshot"]
+    L = ["", "## Rule tuning on a frozen live snapshot", "",
+         f"Pre-registered in `docs/rebuild/TUNING_PLAN.md`. Every number below replays the same saved captures "
+         f"(`{snap['file']}`, sha256 `{snap['sha256'][:12]}`, captured {snap.get('created_utc', '')[:10]}) through the full analysis "
+         "with no network access. Rules were changed using the val split only. The test split was scored once with the old rules and once "
+         "with the final rules; one more test run, made with a stale model by mistake, is logged and discarded "
+         "(`metrics/results/test_access_log.jsonl`). Model: the shipped Layer 1 bundle.", ""]
+    rows = []
+    for split in ("val", "test"):
+        for when in ("before", "after"):
+            sm = t[f"{split}_{when}"]["summary"]
+            fa, rc = sm["legit_false_alarms"], sm["phishing_recall"]
+            ob = sm["per_set"].get("official_brand", {})
+            rows.append([split, when, f"{fa['likely_phishing']} / {fa['n']} ({pct(fa['rate'])})",
+                         f"{ob.get('verdicts', {}).get('likely_phishing')} / {ob.get('n')}",
+                         f"{rc['likely_phishing']} / {rc['n']} ({pct(rc['rate'])})", f"{rc['likely_legitimate']} / {rc['n']}"])
+    L += _table(["Split", "Rules", "Legitimate pages labeled likely_phishing", "of which official brand",
+                 "Fresh phishing labeled likely_phishing", "Fresh phishing labeled likely_legitimate"], rows)
+    L += ["", "Legitimate pages: official brand URLs, popular homepages (Tranco), hard legitimate and curated legitimate URLs (all captures, failed ones included). "
+          "Fresh phishing: newest PhishStats URLs whose capture succeeded and whose host is not itself a top-10K site. "
+          "Feed labels mean reported as phishing; some pages were already replaced by harmless content when captured.", ""]
+    return L
+
+
 def render_verified(r: Dict[str, Any]) -> str:
     p = r["provenance"]
     env = p["environment"]
@@ -177,6 +214,9 @@ def render_verified(r: Dict[str, Any]) -> str:
     else:
         L += ["", "## Not run here", ""]
         L += _table(["Item", "Why"], [[x["item"], x["reason"]] for x in r["not_run"]])
+    tuning = _load_tuning()
+    if tuning:
+        L += tuning_section(tuning)
     L += ["", "## Earlier baseline", "",
           "The pre-rebuild audit (leaky split, scheme artifact, stale calibrator) is kept for comparison in `metrics/audit_baseline/` and at git tag `audit-baseline-2026-09-29`. Its numbers describe the old code and must not be quoted for the current system.", ""]
     return "\n".join(L)
