@@ -104,8 +104,18 @@ Layer-1 URL model, trained on the full Kaggle dataset (794,563 deduplicated URLs
 | Random Forest | 0.793 | 0.884 | 0.784 | 0.802 | 19.2% |
 | LightGBM | 0.803 | 0.877 | 0.764 | 0.847 | 22.7% |
 
-- Tests: 365 of 365 pass; 54.0% line coverage of `src/phishguard`.
-- Real-world checks (never in training): the URL model alone flags 40.4% of 136 official brand URLs and 81.0% of 284 PhishStats phishing URLs. The adjudication layer turns none of the official URLs into a phishing verdict (all go to `uncertain` without live capture).
+- Tests: 372 of 372 pass; 53.5% line coverage of `src/phishguard`.
+- Real-world checks (never in training): the URL model alone flags 40.4% of 136 official brand URLs and 81.0% of 284 PhishStats phishing URLs. Without live capture the adjudication layer turns none of the official URLs into a phishing verdict (all go to `uncertain`).
+
+Full system with live page capture, replaying one frozen snapshot of real pages (captured by GitHub Actions; rules tuned on the validation half only, test half scored once; plan in [docs/rebuild/TUNING_PLAN.md](docs/rebuild/TUNING_PLAN.md)):
+
+| Test half | Labeled likely_phishing | uncertain | likely_legitimate |
+|---|---|---|---|
+| 136 official brand URLs (legitimate) | 4 | 24 | 108 |
+| 99 fresh PhishStats phishing URLs (captured) | 39 | 20 | 40 |
+
+- The system is good at not crying wolf on real sites, and weak at catching fresh phishing: the URL model scores many famous homepages as high as phishing, so rules cannot separate the two without adding false alarms.
+- Full path (Playwright capture plus analysis): p50 6.8 s, p95 15.0 s per URL on a GitHub-hosted runner. URL model alone: p50 15.7 ms.
 - These numbers replace an earlier audit of the original code, which had a leaky split; that record is in `metrics/audit_baseline/`.
 
 ## Known Limitations
