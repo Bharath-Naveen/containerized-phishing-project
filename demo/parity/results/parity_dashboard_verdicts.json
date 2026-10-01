@@ -1,0 +1,93 @@
+{
+ "rows": 21032,
+ "by_set": {
+  "heldout_test": 20000,
+  "official_brand": 298,
+  "phishstats": 284,
+  "hard_legit": 15,
+  "url_suites": 18,
+  "eal_edge_cases": 15,
+  "replay_test": 327,
+  "port_edge_cases": 75
+ },
+ "feature_rows_mismatch": 0,
+ "feature_cells_mismatch": 0,
+ "feature_mismatch_by_name": {},
+ "canonical_mismatch": 0,
+ "max_abs_diff": {
+  "p_raw": 1.1920928955078125e-7,
+  "p_cal": 0,
+  "logistic_regression": 7.216449660063518e-16,
+  "random_forest": 3.3306690738754696e-16,
+  "xgboost": 1.1920928955078125e-7,
+  "lightgbm": 2.220446049250313e-16,
+  "contribs": 0.0000018711344664801288
+ },
+ "rows_with_any_difference": {
+  "p_raw": 5,
+  "p_cal": 0,
+  "logistic_regression": 5447,
+  "random_forest": 3795,
+  "xgboost": 5,
+  "lightgbm": 869
+ },
+ "p_cal_rounded_mismatch": 0,
+ "vote_mismatch": 0,
+ "consensus_mismatch": 0,
+ "spread_mismatch": 1,
+ "host_class_mismatch": 0,
+ "host_conf_mismatch": 0,
+ "dashboard_rows": 21032,
+ "verdict_mismatch": 0,
+ "verdict_counts_python": {
+  "uncertain": 13688,
+  "likely_phishing": 7341,
+  "error": 3
+ },
+ "verdict_counts_js": {
+  "uncertain": 13688,
+  "likely_phishing": 7341,
+  "error": 3
+ },
+ "signal_mismatch": 0,
+ "tolerance_prob_abs": 0.000001,
+ "examples": {
+  "spread": [
+   {
+    "id": 20826,
+    "py": 0.103743,
+    "js": 0.103742,
+    "py_witness": {
+     "logistic_regression": 0.8556483484696347,
+     "random_forest": 0.8941106527122102,
+     "xgboost": 0.7903684377670288,
+     "lightgbm": 0.8391666138887681
+    },
+    "js_witness": [
+     [
+      "logistic_regression",
+      0.8556483484696347,
+      0.855648
+     ],
+     [
+      "random_forest",
+      0.8941106527122102,
+      0.894111
+     ],
+     [
+      "xgboost",
+      0.7903685569763184,
+      0.790369
+     ],
+     [
+      "lightgbm",
+      0.8391666138887681,
+      0.839167
+     ]
+    ]
+   }
+  ]
+ },
+ "js_seconds": 14.736,
+ "pass": true
+}

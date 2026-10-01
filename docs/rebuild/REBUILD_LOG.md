@@ -308,3 +308,45 @@ On test exactly three pages changed, all legitimate sign-in pages (Dropbox login
 **A mistake caught along the way (and fixed):** the cloud workspace had an `outputs/models` folder with the pre-rebuild model (left over from an older copy of the repo, dated 29 September). The app used any `outputs/models` folder in preference to the verified model in `models/layer1`, so the first tuning pass and one test-split run scored URLs with the stale model while GitHub Actions used the right one. Found because a before/after comparison changed pages the new rules could not touch. Fixes: the loader now ignores a folder without a model bundle (with a warning, test added), every report records which model file was loaded and its hash, the tuning was redone with the correct model, and the bad test run is kept in `metrics/results/test_access_log.jsonl` marked invalid. To check whether the Phase 3 "dashboard ML-only" numbers had the same problem, the full reproduce script was run again (`metrics/reproduce.sh`): those rows came out identical, so Phase 3 had the right model (the stale folder arrived later, when this workspace was restored). XGBoost, LightGBM and Random Forest reproduced exactly; the freshly trained bundle gives the same probabilities as the shipped one (max difference 0.0 on 5,000 test rows). Logistic regression, one of the four supporting models, moved slightly (8 of 147,702 test predictions; F1 0.7347 to 0.7346), so its numbers are reproducible to about three decimals rather than exactly. The test rows were seen once in that bad run; nothing from them was used to choose rules (the final rules are a subset of what was chosen on val before that run).
 
 The Windows checkout was checked as well: its `outputs/models` already holds the verified bundle (same sha256 as `models/layer1`), with the old files archived in a subfolder, so it was never affected.
+
+---
+
+## 2026-10-01 · Phase 6: Interactive demo on bharathnaveen.com
+
+**Goal.** Let a visitor paste a URL on the project page and see how the system reasons, and show the full system on real pages, including where it is wrong. Branch `phase6/demo` in both repos. How to rebuild: `demo/README.md`.
+
+### What was built
+
+- **"Try any URL", fully in the browser** (`demo/js/phishguard-engine.js`). A line-by-line port of URL canonicalization, the 54 Layer-1 features (including CPython's `urllib.parse` and `ipaddress` rules, tldextract's suffix matching and the BLAKE2s domain bucket), the shipped XGBoost model and its isotonic calibrator, the other three agreement models (Logistic Regression, LightGBM, Random Forest), the host identity check and the adjudication layer as it runs with no page capture. The URL is never fetched or sent anywhere; only the model files are downloaded, on first use.
+- **Model export** (`demo/export_model.py`), hash-checked against `models/layer1/MANIFEST.json`: `model-core.json` (1.6 MB, 485 KB gzipped: scalers, XGBoost and LightGBM trees, calibrator, LR coefficients, the 6,950 ICANN public suffix rules tldextract loaded (sha256 `5e93da033c30...`), and Python's Unicode tables) and `model-rf.bin.gz` (1.07 MB: the 200-tree, 382,340-node Random Forest, loaded only when needed). No ONNX: plain tree arrays keep it small and let the JS make the same comparisons the libraries make.
+- **Why the verdict needs all four models.** In ML-only mode the adjudication layer uses the 4-model vote (3 of 4 voting phishing adds evidence and can trigger the "high risk, missing evidence" rule), so a XGBoost-only demo could not reproduce the dashboard's verdict. With no capture every page-level input is constant (instrumented on 2,102 URLs: platform context `unknown`, hosting trust `unknown`, no HTML, behavior analysis unavailable), so the JS keeps only the URL-dependent terms. The parity test checks this reduction against the real dashboard, not against itself.
+- **Top contributing signals** are XGBoost's own per-feature path contributions (`pred_contribs`, `approx_contribs=True`), recomputed in JS (largest difference from XGBoost 2.2e-6, from float32 vs float64 arithmetic).
+- **Replay gallery** (`demo/build_gallery.py`): 8 test-split cases from the frozen snapshot replay (`metrics/results/tuning/test_after.json`): 2 brand pages called legitimate (Wells Fargo /about, Apple sign-in), 1 brand false alarm (Wells Fargo homepage), 1 sign-in page fixed by the tuning (Dropbox /home), 2 phishing caught (a Google Docs login clone on an unrelated domain, a Google sign-in clone on a bare IP), 2 missed (a clean-looking page on vercel.app, a page that showed the capture a "Just a moment..." bot check). Verdicts and signals come from the replay file, page titles from the snapshot (read only, nothing re-scored on the test split), the URL score from the shipped model. Phishing URLs are defanged and never links. The short explanation per case is hand-written from the recorded signals and labeled as such.
+- **Honesty panel**, generated from `test_after.json`, `test_before.json` and `evaluation.json`: 4 of 136 brand sites flagged by the full system (7 before tuning; URL model alone 40.4%), 39 of 99 fresh phishing caught with 40 called legitimate (the known weakness), and 69 of 284 PhishStats URLs called phishing in ML-only mode with the other 215 uncertain.
+- **Portfolio wiring** (`demo/install_portfolio.py`, idempotent): demo section first in `<main>` of `projects/phishing-detection-system.html`, a "Try it" button in that page's hero, and a "Try it" link on the homepage card.
+
+### Parity: JS vs Python
+
+The held-out test split was rebuilt with `phishguard train --full` in the cloud workspace; its file matches `evaluation.json` exactly (sha256 `a31c6c43efea...`, 147,714 rows; 147,702 are scored in VERIFIED_METRICS, see the note below). The reference is the app's own code with the shipped bundle (sha256 checked).
+
+| Check | URLs | Result |
+|---|---|---|
+| 54 features identical | 148,746 (147,714 held-out + 1,032 curated and edge-case URLs) | 148,746 of 148,746 |
+| Calibrated score, to the 6 decimals the app reports | 148,746 | 148,746 of 148,746 |
+| Each model's vote (probability >= 0.5) and the 4-model consensus | 148,746 | 148,746 of 148,746 |
+| Host identity class and confidence | 148,746 | 148,746 of 148,746 |
+| Verdict of the real ML-only dashboard (`build_dashboard_analysis(reinforcement=False)`) | 21,032 (20,000 seeded held-out + all 1,032 others) | 21,032 of 21,032 (13,688 uncertain, 7,341 likely phishing, 3 app errors), and the same phishing, legitimacy and ambiguity signal lists on all 21,029 that have a verdict |
+
+Largest probability differences (tolerance 1e-6): XGBoost 1.19e-7 (on 35 of 148,746 URLs), Logistic Regression 1.1e-15, Random Forest 3.3e-16, LightGBM 2.2e-16, calibrated score 0. The XGBoost difference is in the last bits of float32: XGBoost's compiled `exp` rounds differently from the browser's (checked on one URL: identical margin 1.327148, numpy's float32 exp reproduces XGBoost's result). On 1 URL this moved the model-spread number in the 6th decimal (0.103743 vs 0.103742), which has no effect on any verdict. Files: `demo/parity/results/parity_full_features_models.json`, `parity_dashboard_verdicts.json`. CI runs the same check on 1,332 URLs (`tests/test_demo_js_parity.py`, about 3 minutes; skipped if Node is missing).
+
+### Found along the way
+
+- **The dashboard crashes on some malformed URLs.** For inputs `urlsplit` rejects, such as `http://[1.2.3.4]/` or `http://[bad/`, `capture_signals._enrich_capture_and_html_signals` calls `urlparse` without a guard, so `build_dashboard_analysis` raises `ValueError` even in ML-only mode. The demo mirrors this ("no verdict: the Python app stops on this URL") rather than inventing a verdict. 3 of the 21,032 parity URLs hit it, all hand-written edge cases. Not fixed here (it changes app behavior); a one-line guard is a candidate follow-up.
+- **30 rows lose their features in the training files.** 18 train and 12 test rows have empty feature columns in `kaggle_train.csv` / `kaggle_test.csv` (several are URLs ending in `//`, for example `www.sfbi.fr//`), and training drops them. That is the difference between the 147,714-row test file and the 147,702 rows in VERIFIED_METRICS. The app itself computes features for these URLs normally. Cause not investigated yet.
+- **Public suffix list drift.** tldextract fetches the current list at run time, so the app's registered-domain parsing can change over time. The demo pins the list it was exported with (hash above).
+- **Reproducibility, again.** The full retrain in the cloud workspace reproduced the split counts (600,761 / 147,714), the calibrator Brier scores (0.1408 raw, 0.1455 calibrated) and the test file hash exactly.
+
+### Checks
+
+- Pages at 390 px and 1280 px, light and dark: no horizontal scroll on the project page, no console errors, and no network request contains the URL typed into the box (Playwright, local server). Screenshots were shared in the chat.
+- The homepage already scrolls sideways at 390 px (its hero is 453 px wide). That was already there before this change and is not touched here.
