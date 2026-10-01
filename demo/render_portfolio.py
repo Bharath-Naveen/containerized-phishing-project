@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "demo" / "build"
-REPO = "https://github.com/Bharath-Naveen/containerized-phishing-project"
+REPO = "https://github.com/Bharath-Naveen/phishing-detection-system"
 
 VERDICT = {"likely_phishing": ("Likely phishing", "pd-phishing"), "uncertain": ("Uncertain", "pd-uncertain"), "likely_legitimate": ("Likely legitimate", "pd-legitimate")}
 CATEGORY = {
