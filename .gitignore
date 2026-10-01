@@ -92,3 +92,7 @@ metrics/_work/
 # --- shipped verified model (small, see models/layer1/MANIFEST.json) ---
 !models/layer1/
 !models/layer1/*.joblib
+
+# Phase 6 demo: generated files (rebuild with the commands in demo/README.md)
+demo/build/
+demo/parity/out/
